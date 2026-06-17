@@ -1,0 +1,254 @@
+{
+  "_meta": {
+    "description": "Synthetic demo fixtures for the counterparty risk demo. All entities, persons, TINs, case numbers and URLs are FICTIONAL. URL paths are placeholders on real source domains to show evidence-link UX.",
+    "spec_version": "scoring-model-spec.md v0.1 (post-cull)",
+    "generated_at": "2026-06-10",
+    "checked_at_render": "2026-06-10T14:30:00+04:00",
+    "coverage_domains": ["registry", "graph", "tax", "court", "enforcement", "pledge", "notice", "procurement", "web", "contact"]
+  },
+  "fixtures": [
+    {
+      "id": "green-araks",
+      "label": "Clear GREEN — established operator",
+      "demonstrates": ["SP-01", "SP-03", "weak-positive cap R-07", "full coverage", "TIN-first input", "representative verified"],
+      "input": {
+        "entity_name": "Araks Logistics",
+        "tin": "01857342",
+        "person_first_name": "Vahram",
+        "phone": "+374 10 545-770"
+      },
+      "resolution": {
+        "ambiguous": false,
+        "selected": { "tin": "01857342", "name_hy": "«Արաքս Լոջիսթիքս» ՍՊԸ", "name_en": "Araks Logistics LLC" },
+        "candidates_reserve": []
+      },
+      "facts": [
+        { "fact_id": "g01", "catalog_id": "F-REG-01", "subject": "01857342", "domain": "registry", "field": "legal_status", "value": "active", "source": "e-register", "url": "https://www.e-register.am/am/companies/01857342", "fetched_at": "2026-06-10T14:21:03+04:00", "match": "exact" },
+        { "fact_id": "g02", "catalog_id": "F-REG-02", "subject": "01857342", "domain": "registry", "field": "registration_date", "value": "2014-03-12", "source": "e-register", "url": "https://www.e-register.am/am/companies/01857342", "fetched_at": "2026-06-10T14:21:03+04:00", "match": "exact" },
+        { "fact_id": "g03", "catalog_id": "F-REG-05", "subject": "01857342", "domain": "registry", "field": "director", "value": "Vahram Petrosyan", "source": "e-register", "url": "https://www.e-register.am/am/companies/01857342", "fetched_at": "2026-06-10T14:21:03+04:00", "match": "exact" },
+        { "fact_id": "g04", "catalog_id": "F-REG-07", "subject": "01857342", "domain": "registry", "field": "ubo_chain", "value": "Vahram Petrosyan — 100%, natural person", "source": "e-register (BODS)", "url": "https://www.e-register.am/am/companies/01857342/beneficial-owners", "fetched_at": "2026-06-10T14:21:05+04:00", "match": "exact" },
+        { "fact_id": "g05", "catalog_id": "F-REG-08", "subject": "01857342", "domain": "registry", "field": "change_history", "value": "no director changes, no renames, address stable since 2017", "source": "e-register", "url": "https://www.e-register.am/am/companies/01857342/history", "fetched_at": "2026-06-10T14:21:06+04:00", "match": "exact" },
+        { "fact_id": "g06", "catalog_id": "F-TAX-02", "subject": "01857342", "domain": "tax", "field": "vat_status", "value": "active since 2015-01", "source": "SRC", "url": "https://www.src.am/taxpayer/01857342", "fetched_at": "2026-06-10T14:21:09+04:00", "match": "exact" },
+        { "fact_id": "g07", "catalog_id": "F-PRC-01", "subject": "01857342", "domain": "procurement", "field": "state_contracts", "value": "3 contracts 2024–2025, total 84.2M AMD (transport services)", "source": "armeps", "url": "https://armeps.am/contracts/?supplier=01857342", "fetched_at": "2026-06-10T14:21:14+04:00", "match": "exact" },
+        { "fact_id": "g08", "catalog_id": "F-CRT-01", "subject": "01857342", "domain": "court", "field": "plaintiff_cases", "value": "2 collection cases (2023, 2025), both won, 6.1M AMD recovered", "source": "Datalex", "url": "https://datalex.am/?app=case&search=01857342", "fetched_at": "2026-06-10T14:21:18+04:00", "match": "exact" },
+        { "fact_id": "g09", "catalog_id": "F-CRT-02", "subject": "01857342", "domain": "court", "field": "defendant_cases", "value": "none found", "source": "Datalex", "url": "https://datalex.am/?app=case&search=01857342", "fetched_at": "2026-06-10T14:21:18+04:00", "match": "exact" },
+        { "fact_id": "g10", "catalog_id": "F-ENF-01", "subject": "01857342", "domain": "enforcement", "field": "open_proceedings", "value": "none found", "source": "DAHK", "url": "https://dahk.am/search?tin=01857342", "fetched_at": "2026-06-10T14:21:21+04:00", "match": "exact" },
+        { "fact_id": "g11", "catalog_id": "F-PLG-01", "subject": "01857342", "domain": "pledge", "field": "movable_pledges", "value": "1 pledge (3 vehicles) registered 2019, lender Ameriabank — working-capital era, mature entity", "source": "Pledge register", "url": "https://www.e-register.am/am/pledges/01857342", "fetched_at": "2026-06-10T14:21:23+04:00", "match": "exact" },
+        { "fact_id": "g12", "catalog_id": "F-NTC-01", "subject": "01857342", "domain": "notice", "field": "notices", "value": "none found", "source": "Azdarar", "url": "https://www.azdarar.am/search?q=01857342", "fetched_at": "2026-06-10T14:21:25+04:00", "match": "exact" },
+        { "fact_id": "g13", "catalog_id": "F-WEB-01", "subject": "01857342", "domain": "web", "field": "domain_history", "value": "arakslogistics.am — first Wayback snapshot 2016-08, content matches freight activity", "source": "WHOIS / Archive", "url": "https://web.archive.org/web/2016/arakslogistics.am", "fetched_at": "2026-06-10T14:21:29+04:00", "match": "exact" },
+        { "fact_id": "g14", "catalog_id": "F-CON-01", "subject": "channel:+37410545770", "domain": "contact", "field": "phone_reachability", "value": "reachable, landline (Yerevan prefix)", "source": "lookup", "url": "", "fetched_at": "2026-06-10T14:21:31+04:00", "match": "exact" },
+        { "fact_id": "g15", "catalog_id": "F-CON-02", "subject": "channel:info@arakslogistics.am", "domain": "contact", "field": "email_domain_match", "value": "matches website domain", "source": "MX check", "url": "", "fetched_at": "2026-06-10T14:21:31+04:00", "match": "exact" },
+        { "fact_id": "g16", "catalog_id": "F-REP-01", "subject": "person:Vahram", "domain": "representative", "field": "principal_match", "value": "matches registered director Vahram Petrosyan", "source": "derived", "url": "https://www.e-register.am/am/companies/01857342", "fetched_at": "2026-06-10T14:21:32+04:00", "match": "exact" },
+        { "fact_id": "g17", "catalog_id": "F-SAN-01", "subject": "person:Vahram Petrosyan", "domain": "sanctions", "field": "screening", "value": "no matches (OFAC, EU, UK)", "source": "consolidated lists", "url": "", "fetched_at": "2026-06-10T14:21:33+04:00", "match": "exact" }
+      ],
+      "signals": [
+        { "id": "SP-01", "grade": "strong", "polarity": "+", "weight_base": 10, "weight_effective": 10, "evidence": ["g01", "g02", "g05"], "note": "12 years continuously active, no status interruptions, no director churn." },
+        { "id": "SP-03", "grade": "strong", "polarity": "+", "weight_base": 10, "weight_effective": 10, "evidence": ["g07"], "note": "Won 3 state procurement contracts in the last 36 months (84.2M AMD total) — state contracts require clean tax and legal standing." },
+        { "id": "WP-01", "grade": "weak", "polarity": "+", "weight_base": 4, "weight_effective": 4, "evidence": ["g13"], "note": "Website with 10-year archive history, content matches activity." },
+        { "id": "WP-02", "grade": "weak", "polarity": "+", "weight_base": 2, "weight_effective": 2, "evidence": ["g14"], "note": "Phone reachable." },
+        { "id": "WP-03", "grade": "weak", "polarity": "+", "weight_base": 2, "weight_effective": 2, "evidence": ["g15"], "note": "Email domain matches website." },
+        { "id": "WP-06", "grade": "weak", "polarity": "+", "weight_base": 3, "weight_effective": 3, "evidence": ["g16"], "note": "Your contact 'Vahram' matches the registered director." },
+        { "id": "WP-09", "grade": "weak", "polarity": "+", "weight_base": 4, "weight_effective": 4, "evidence": ["g08"], "note": "Enforces own receivables in court — 2 collection cases won." }
+      ],
+      "rules_fired": [
+        { "id": "R-05", "effect": "pledge neutral", "note": "2019 vehicle pledge on a mature entity treated as working-capital financing — not a distress signal." },
+        { "id": "R-07", "effect": "weak positives 15 → capped at +10", "note": "Weak (counterparty-controlled) positives capped: web presence polishes the score, never carries it." }
+      ],
+      "verdict": {
+        "state": "SCORED",
+        "score": 30,
+        "coverage": { "verified": 10, "total": 10 },
+        "tier_map": { "T1": "green", "T2": "green", "T3": "green", "T4": "yellow" },
+        "band_blur": 0,
+        "narrative": [
+          { "text": "No hard flags. No defendant cases, no open enforcement, no distress notices.", "evidence": ["g09", "g10", "g12"] },
+          { "text": "12 years continuously active under the same director, address stable since 2017.", "evidence": ["g01", "g02", "g05"] },
+          { "text": "Won 3 state procurement contracts in 2024–2025 totaling 84.2M AMD — public contracts require clean standing.", "evidence": ["g07"] },
+          { "text": "Sues and wins against its own non-payers — a functioning receivables process.", "evidence": ["g08"] },
+          { "text": "2019 vehicle pledge reads as routine fleet financing on a mature entity, not distress.", "evidence": ["g11"] },
+          { "text": "Web and contact hygiene strong (10-year site history, matching email domain, reachable phone), capped at +10 as counterparty-controlled.", "evidence": ["g13", "g14", "g15"] },
+          { "text": "Your contact 'Vahram' is the registered director.", "evidence": ["g16"] },
+          { "text": "All 10 data domains verified. Recommendation: comfortable through material credit exposure (T3); apply standard caution at large/preferential terms (T4)." , "evidence": [] }
+        ],
+        "missing": [
+          { "gap": "No ACRA consent", "cta": "Send KYC magic link", "mock": true },
+          { "gap": "No financials", "cta": "Request last 2 years of statements", "mock": true }
+        ]
+      }
+    },
+    {
+      "id": "red-vanand",
+      "label": "Clear RED — blocker short-circuit",
+      "demonstrates": ["B-03 blocker", "SN-01", "SN-03", "SN-04", "ambiguous name resolution", "blocked gradient UI"],
+      "input": {
+        "entity_name": "Vanand Trans",
+        "tin": null,
+        "person_first_name": null,
+        "phone": null
+      },
+      "resolution": {
+        "ambiguous": true,
+        "candidates": [
+          { "tin": "04219876", "name_hy": "«Վանանդ Տրանս» ՍՊԸ", "name_en": "Vanand Trans LLC", "address": "Yerevan, Arshakunyats 41", "director": "Karen Hovhannisyan", "registration_date": "2019-06-20", "status": "active" },
+          { "tin": "07331204", "name_hy": "«Վանանդ Տրանս Սերվիս» ՍՊԸ", "name_en": "Vanand Trans Service LLC", "address": "Gyumri, Shirakatsi 12", "director": "Ashot Vanyan", "registration_date": "2021-11-03", "status": "active" }
+        ],
+        "selected": { "tin": "04219876", "name_hy": "«Վանանդ Տրանս» ՍՊԸ", "name_en": "Vanand Trans LLC" },
+        "candidates_reserve": ["07331204"]
+      },
+      "facts": [
+        { "fact_id": "r01", "catalog_id": "F-REG-01", "subject": "04219876", "domain": "registry", "field": "legal_status", "value": "active", "source": "e-register", "url": "https://www.e-register.am/am/companies/04219876", "fetched_at": "2026-06-10T14:24:01+04:00", "match": "exact" },
+        { "fact_id": "r02", "catalog_id": "F-REG-02", "subject": "04219876", "domain": "registry", "field": "registration_date", "value": "2019-06-20", "source": "e-register", "url": "https://www.e-register.am/am/companies/04219876", "fetched_at": "2026-06-10T14:24:01+04:00", "match": "exact" },
+        { "fact_id": "r03", "catalog_id": "F-ENF-01", "subject": "04219876", "domain": "enforcement", "field": "open_proceedings", "value": "Open enforcement proceeding №14/11432-26, claim 18.4M AMD, opened 2026-02-17", "source": "DAHK", "url": "https://dahk.am/search?tin=04219876", "fetched_at": "2026-06-10T14:24:08+04:00", "match": "exact" },
+        { "fact_id": "r04", "catalog_id": "F-CRT-02", "subject": "04219876", "domain": "court", "field": "defendant_cases", "value": "3 contract-debt cases as defendant 2024–2026, aggregate claims 31.7M AMD (1 lost, 2 pending)", "source": "Datalex", "url": "https://datalex.am/?app=case&search=04219876", "fetched_at": "2026-06-10T14:24:12+04:00", "match": "exact" },
+        { "fact_id": "r05", "catalog_id": "F-GRA-01", "subject": "person:Karen Hovhannisyan", "domain": "graph", "field": "affiliations", "value": "Director of «ՎանՏրանս Կարգո» ՍՊԸ (VanTrans Cargo LLC, TIN 03187765) 2015–2021", "source": "e-register", "url": "https://www.e-register.am/am/companies/03187765", "fetched_at": "2026-06-10T14:24:15+04:00", "match": "exact" },
+        { "fact_id": "r06", "catalog_id": "F-GRA-02", "subject": "03187765", "domain": "graph", "field": "affiliated_status", "value": "VanTrans Cargo LLC — declared bankrupt 2021-09 (case ՍՆԴ/0412/04/21)", "source": "Datalex / e-register", "url": "https://datalex.am/?app=case&case=SND-0412-04-21", "fetched_at": "2026-06-10T14:24:17+04:00", "match": "exact" },
+        { "fact_id": "r07", "catalog_id": "F-NTC-01", "subject": "04219876", "domain": "notice", "field": "notices", "value": "Capital reduction notice published 2026-01-22", "source": "Azdarar", "url": "https://www.azdarar.am/announcements/04219876", "fetched_at": "2026-06-10T14:24:19+04:00", "match": "exact" },
+        { "fact_id": "r08", "catalog_id": "F-TAX-02", "subject": "04219876", "domain": "tax", "field": "vat_status", "value": "active", "source": "SRC", "url": "https://www.src.am/taxpayer/04219876", "fetched_at": "2026-06-10T14:24:21+04:00", "match": "exact" },
+        { "fact_id": "r09", "catalog_id": "F-SAN-01", "subject": "person:Karen Hovhannisyan", "domain": "sanctions", "field": "screening", "value": "no matches", "source": "consolidated lists", "url": "", "fetched_at": "2026-06-10T14:24:23+04:00", "match": "exact" }
+      ],
+      "signals": [
+        { "id": "B-03", "grade": "blocker", "polarity": "-", "weight_base": null, "weight_effective": null, "evidence": ["r03"], "note": "Open compulsory-enforcement proceeding: a creditor has already won a judgment and bailiffs are collecting 18.4M AMD." },
+        { "id": "SN-01", "grade": "strong", "polarity": "-", "weight_base": -12, "weight_effective": -12, "evidence": ["r04"], "note": "Defendant in 3 contract-debt cases within 24 months, 31.7M AMD aggregate." },
+        { "id": "SN-03", "grade": "strong", "polarity": "-", "weight_base": -8, "weight_effective": -8, "evidence": ["r05", "r06"], "note": "Director's previous entity (VanTrans Cargo LLC) declared bankrupt in 2021. Non-phoenix: current entity predates the bankruptcy." },
+        { "id": "SN-04", "grade": "strong", "polarity": "-", "weight_base": -8, "weight_effective": -8, "evidence": ["r07"], "note": "Capital reduction published 5 months ago — equity is being pulled out while creditors collect." }
+      ],
+      "rules_fired": [],
+      "verdict": {
+        "state": "BLOCKED",
+        "blockers": ["B-03"],
+        "score": -28,
+        "coverage": { "verified": 10, "total": 10 },
+        "tier_map": { "T1": "red", "T2": "red", "T3": "red", "T4": "red" },
+        "band_blur": 0,
+        "narrative": [
+          { "text": "BLOCKED: open compulsory-enforcement proceeding №14/11432-26 — a creditor already holds a judgment, bailiffs are collecting 18.4M AMD. No deal structure makes this counterparty acceptable until resolved.", "evidence": ["r03"] },
+          { "text": "Defendant in 3 contract-debt cases in the last 24 months (31.7M AMD aggregate, 1 lost, 2 pending).", "evidence": ["r04"] },
+          { "text": "Director Karen Hovhannisyan's previous company was declared bankrupt in 2021.", "evidence": ["r05", "r06"] },
+          { "text": "Capital reduction published in January 2026 — equity exiting while claims are open.", "evidence": ["r07"] },
+          { "text": "All 10 domains verified. Recommendation: do not proceed on any terms; re-check after enforcement proceeding closes.", "evidence": [] }
+        ],
+        "missing": []
+      }
+    },
+    {
+      "id": "yellow-sevan",
+      "label": "Reasoning YELLOW — offset rule",
+      "demonstrates": ["SN-07", "SP-05", "R-01 track-record offset", "visible model reasoning"],
+      "input": {
+        "entity_name": "Sevan Cargo Group",
+        "tin": "09134527",
+        "person_first_name": "Anna",
+        "phone": "+374 95 112-348"
+      },
+      "resolution": {
+        "ambiguous": false,
+        "selected": { "tin": "09134527", "name_hy": "«Սևան Կարգո Գրուպ» ՍՊԸ", "name_en": "Sevan Cargo Group LLC" },
+        "candidates_reserve": []
+      },
+      "facts": [
+        { "fact_id": "y01", "catalog_id": "F-REG-01", "subject": "09134527", "domain": "registry", "field": "legal_status", "value": "active", "source": "e-register", "url": "https://www.e-register.am/am/companies/09134527", "fetched_at": "2026-06-10T14:27:02+04:00", "match": "exact" },
+        { "fact_id": "y02", "catalog_id": "F-REG-02", "subject": "09134527", "domain": "registry", "field": "registration_date", "value": "2025-09-04 (9 months old)", "source": "e-register", "url": "https://www.e-register.am/am/companies/09134527", "fetched_at": "2026-06-10T14:27:02+04:00", "match": "exact" },
+        { "fact_id": "y03", "catalog_id": "F-REG-07", "subject": "09134527", "domain": "registry", "field": "ubo_chain", "value": "Anna Grigoryan — 100%, natural person", "source": "e-register (BODS)", "url": "https://www.e-register.am/am/companies/09134527/beneficial-owners", "fetched_at": "2026-06-10T14:27:04+04:00", "match": "exact" },
+        { "fact_id": "y04", "catalog_id": "F-GRA-01", "subject": "person:Anna Grigoryan", "domain": "graph", "field": "affiliations", "value": "Also 100% owner and director of «Սևան Ֆրեյթ» ՍՊԸ (Sevan Freight LLC, TIN 02661189) since 2014", "source": "e-register", "url": "https://www.e-register.am/am/companies/02661189", "fetched_at": "2026-06-10T14:27:07+04:00", "match": "exact" },
+        { "fact_id": "y05", "catalog_id": "F-GRA-02", "subject": "02661189", "domain": "graph", "field": "affiliated_status", "value": "Sevan Freight LLC — active 12 years, no defendant cases, no enforcement, VAT active", "source": "e-register / Datalex / DAHK", "url": "https://www.e-register.am/am/companies/02661189", "fetched_at": "2026-06-10T14:27:11+04:00", "match": "exact" },
+        { "fact_id": "y06", "catalog_id": "F-TAX-02", "subject": "09134527", "domain": "tax", "field": "vat_status", "value": "active since 2025-10", "source": "SRC", "url": "https://www.src.am/taxpayer/09134527", "fetched_at": "2026-06-10T14:27:13+04:00", "match": "exact" },
+        { "fact_id": "y07", "catalog_id": "F-CRT-02", "subject": "09134527", "domain": "court", "field": "defendant_cases", "value": "none found", "source": "Datalex", "url": "https://datalex.am/?app=case&search=09134527", "fetched_at": "2026-06-10T14:27:16+04:00", "match": "exact" },
+        { "fact_id": "y08", "catalog_id": "F-ENF-01", "subject": "09134527", "domain": "enforcement", "field": "open_proceedings", "value": "none found", "source": "DAHK", "url": "https://dahk.am/search?tin=09134527", "fetched_at": "2026-06-10T14:27:18+04:00", "match": "exact" },
+        { "fact_id": "y09", "catalog_id": "F-WEB-01", "subject": "09134527", "domain": "web", "field": "domain_history", "value": "sevancargo.am registered 2026-02, no archive history", "source": "WHOIS / Archive", "url": "https://web.archive.org/web/2026/sevancargo.am", "fetched_at": "2026-06-10T14:27:21+04:00", "match": "exact" },
+        { "fact_id": "y10", "catalog_id": "F-CON-02", "subject": "channel:sevancargo.llc@gmail.com", "domain": "contact", "field": "email_domain_match", "value": "generic gmail address as primary contact", "source": "string match", "url": "", "fetched_at": "2026-06-10T14:27:22+04:00", "match": "exact" },
+        { "fact_id": "y11", "catalog_id": "F-REP-01", "subject": "person:Anna", "domain": "representative", "field": "principal_match", "value": "matches registered owner-director Anna Grigoryan", "source": "derived", "url": "https://www.e-register.am/am/companies/09134527", "fetched_at": "2026-06-10T14:27:23+04:00", "match": "exact" },
+        { "fact_id": "y12", "catalog_id": "F-SAN-01", "subject": "person:Anna Grigoryan", "domain": "sanctions", "field": "screening", "value": "no matches", "source": "consolidated lists", "url": "", "fetched_at": "2026-06-10T14:27:24+04:00", "match": "exact" }
+      ],
+      "signals": [
+        { "id": "SN-07", "grade": "strong", "polarity": "-", "weight_base": -8, "weight_effective": -4, "evidence": ["y02"], "note": "Entity is 9 months old. Halved by R-01 — see below." },
+        { "id": "SP-05", "grade": "strong", "polarity": "+", "weight_base": 8, "weight_effective": 8, "evidence": ["y04", "y05"], "note": "Owner's other company has run clean for 12 years: no defendant cases, no enforcement." },
+        { "id": "WP-06", "grade": "weak", "polarity": "+", "weight_base": 3, "weight_effective": 3, "evidence": ["y11"], "note": "Your contact 'Anna' is the registered owner-director." },
+        { "id": "WN-03", "grade": "weak", "polarity": "-", "weight_base": -3, "weight_effective": -3, "evidence": ["y09"], "note": "Domain registered 4 months ago, no archive history." },
+        { "id": "WN-02", "grade": "weak", "polarity": "-", "weight_base": -2, "weight_effective": -2, "evidence": ["y10"], "note": "Generic gmail as primary B2B contact." }
+      ],
+      "rules_fired": [
+        { "id": "R-01", "effect": "SN-07 weight halved: −8 → −4", "note": "Entity-age concern partially offset by the principal's 12-year clean record at Sevan Freight LLC." }
+      ],
+      "verdict": {
+        "state": "SCORED",
+        "score": 2,
+        "coverage": { "verified": 10, "total": 10 },
+        "tier_map": { "T1": "green", "T2": "yellow", "T3": "yellow", "T4": "red" },
+        "band_blur": 0,
+        "narrative": [
+          { "text": "No hard flags: no defendant cases, no enforcement, VAT active.", "evidence": ["y07", "y08", "y06"] },
+          { "text": "Concern: the entity is 9 months old.", "evidence": ["y02"] },
+          { "text": "Offset: the same owner, Anna Grigoryan, has run Sevan Freight LLC cleanly for 12 years — no litigation as defendant, no enforcement. This looks like a second vehicle by an established operator, not a cold start.", "evidence": ["y04", "y05"] },
+          { "text": "Your contact 'Anna' is the registered owner-director.", "evidence": ["y11"] },
+          { "text": "Web footprint is thin (4-month-old domain, gmail contact) — consistent with a young entity, mildly negative.", "evidence": ["y09", "y10"] },
+          { "text": "All 10 domains verified. Recommendation: prepaid terms comfortable; small-to-material credit acceptable with caution; avoid large or preferential terms until the new entity builds its own record. Worth asking why the new entity exists alongside the old one.", "evidence": [] }
+        ],
+        "missing": [
+          { "gap": "No ACRA consent", "cta": "Send KYC magic link", "mock": true },
+          { "gap": "No financials", "cta": "Request last 2 years of statements", "mock": true }
+        ]
+      }
+    },
+    {
+      "id": "spawn-hrazdan",
+      "label": "Channel mismatch — spawn offer",
+      "demonstrates": ["CH-02", "spawn offer", "dirty input absorbed by the tool"],
+      "input": {
+        "entity_name": "Hrazdan Freight",
+        "tin": null,
+        "person_first_name": "Davit",
+        "phone": "+374 91 555-214"
+      },
+      "resolution": {
+        "ambiguous": false,
+        "selected": { "tin": "06778215", "name_hy": "«Հրազդան Ֆրեյթ» ՍՊԸ", "name_en": "Hrazdan Freight LLC" },
+        "candidates_reserve": []
+      },
+      "facts": [
+        { "fact_id": "s01", "catalog_id": "F-REG-01", "subject": "06778215", "domain": "registry", "field": "legal_status", "value": "active", "source": "e-register", "url": "https://www.e-register.am/am/companies/06778215", "fetched_at": "2026-06-10T14:31:02+04:00", "match": "fuzzy" },
+        { "fact_id": "s02", "catalog_id": "F-REG-02", "subject": "06778215", "domain": "registry", "field": "registration_date", "value": "2022-04-15", "source": "e-register", "url": "https://www.e-register.am/am/companies/06778215", "fetched_at": "2026-06-10T14:31:02+04:00", "match": "fuzzy" },
+        { "fact_id": "s03", "catalog_id": "F-REG-04", "subject": "06778215", "domain": "registry", "field": "address", "value": "Hrazdan, Kentron 8, stable since registration", "source": "e-register", "url": "https://www.e-register.am/am/companies/06778215", "fetched_at": "2026-06-10T14:31:03+04:00", "match": "fuzzy" },
+        { "fact_id": "s04", "catalog_id": "F-CRT-02", "subject": "06778215", "domain": "court", "field": "defendant_cases", "value": "none found", "source": "Datalex", "url": "https://datalex.am/?app=case&search=06778215", "fetched_at": "2026-06-10T14:31:08+04:00", "match": "fuzzy" },
+        { "fact_id": "s05", "catalog_id": "F-ENF-01", "subject": "06778215", "domain": "enforcement", "field": "open_proceedings", "value": "none found", "source": "DAHK", "url": "https://dahk.am/search?tin=06778215", "fetched_at": "2026-06-10T14:31:10+04:00", "match": "fuzzy" },
+        { "fact_id": "s06", "catalog_id": "F-TAX-02", "subject": "06778215", "domain": "tax", "field": "vat_status", "value": "active", "source": "SRC", "url": "https://www.src.am/taxpayer/06778215", "fetched_at": "2026-06-10T14:31:12+04:00", "match": "exact" },
+        { "fact_id": "s07", "catalog_id": "F-WEB-01", "subject": "06778215", "domain": "web", "field": "domain_history", "value": "hrazdanfreight.am — first snapshot 2022-09, content matches activity", "source": "WHOIS / Archive", "url": "https://web.archive.org/web/2022/hrazdanfreight.am", "fetched_at": "2026-06-10T14:31:16+04:00", "match": "exact" },
+        { "fact_id": "s08", "catalog_id": "F-CON-03", "subject": "channel:+37491555214", "domain": "contact", "field": "channel_attribution", "value": "Number publicly listed as contact of «Լոռի Տրանս Սերվիս» ՍՊԸ (Lori Trans Service LLC, TIN 05442198) on Spyur — NOT of Hrazdan Freight LLC", "source": "Spyur reverse", "url": "https://www.spyur.am/en/companies/lori-trans-service", "fetched_at": "2026-06-10T14:31:19+04:00", "match": "exact" },
+        { "fact_id": "s09", "catalog_id": "F-REP-01", "subject": "person:Davit", "domain": "representative", "field": "principal_match", "value": "no match among registered principals — neutral, no signal", "source": "derived", "url": "", "fetched_at": "2026-06-10T14:31:20+04:00", "match": "exact" },
+        { "fact_id": "s10", "catalog_id": "F-SAN-01", "subject": "06778215", "domain": "sanctions", "field": "screening", "value": "no matches", "source": "consolidated lists", "url": "", "fetched_at": "2026-06-10T14:31:21+04:00", "match": "exact" }
+      ],
+      "signals": [
+        { "id": "CH-02", "grade": "strong", "polarity": "-", "weight_base": -6, "weight_effective": -6, "evidence": ["s08"], "note": "The number you were contacted from publicly belongs to a different company — Lori Trans Service LLC. Could be a broker or sister company; verify the relationship." },
+        { "id": "WP-01", "grade": "weak", "polarity": "+", "weight_base": 4, "weight_effective": 4, "evidence": ["s07"], "note": "Website with 4-year archive history matching activity." },
+        { "id": "WP-07", "grade": "weak", "polarity": "+", "weight_base": 2, "weight_effective": 2, "evidence": ["s03"], "note": "Registered address stable since 2022." }
+      ],
+      "rules_fired": [
+        { "id": "R-08", "effect": "registry signals damped ×0.7 where evidence is name-matched", "note": "Entity resolved by name, not TIN — registry facts marked fuzzy. Provide the TIN to firm these up." }
+      ],
+      "verdict": {
+        "state": "SCORED",
+        "score": 0,
+        "coverage": { "verified": 10, "total": 10 },
+        "tier_map": { "T1": "green", "T2": "yellow", "T3": "yellow", "T4": "red" },
+        "band_blur": 1,
+        "narrative": [
+          { "text": "The entity itself looks unremarkable-clean: 4 years active, no defendant cases, no enforcement, VAT active.", "evidence": ["s01", "s04", "s05", "s06"] },
+          { "text": "However: the phone number you were contacted from is publicly listed as belonging to Lori Trans Service LLC — a different company. This is not necessarily fraud (brokers and affiliated dispatchers are common), but the relationship is unverified.", "evidence": ["s08"] },
+          { "text": "'Davit' holds no registered role in Hrazdan Freight — neutral on its own; most legitimate contacts don't.", "evidence": ["s09"] },
+          { "text": "Resolution was by name, not TIN — registry evidence is name-matched and slightly discounted.", "evidence": ["s01"] },
+          { "text": "Recommendation: prepaid terms fine; before extending credit, confirm in writing which entity you are actually contracting with — Hrazdan Freight or Lori Trans Service — and run the check on whichever entity signs.", "evidence": [] }
+        ],
+        "missing": [
+          { "gap": "No TIN provided", "cta": "Add TIN to firm up name-matched evidence", "mock": false },
+          { "gap": "No ACRA consent", "cta": "Send KYC magic link", "mock": true }
+        ],
+        "spawn_offer": {
+          "trigger": "CH-02",
+          "target_tin": "05442198",
+          "target_name_en": "Lori Trans Service LLC",
+          "target_name_hy": "«Լոռի Տրանս Սերվիս» ՍՊԸ",
+          "message": "The number you were contacted from belongs to Lori Trans Service LLC. Run a check on them too?"
+        }
+      }
+    }
+  ]
+}
