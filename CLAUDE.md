@@ -13,6 +13,10 @@ touching the repo. Keep it accurate — see "Sync docs in the same commit as the
 > There is no safety net between your push and live. Always work on a branch, run the full
 > verification suite locally, and merge to `main` only when it is genuinely deploy-ready.
 > Treat every `main` push as a production release.
+>
+> _Bootstrap exception (current): GitHub Pages is not enabled yet, so `main` serves no live
+> traffic — direct commits are acceptable during bootstrap. The moment the Pages deploy is live,
+> switch to branch → verify → merge._
 
 ---
 
@@ -30,6 +34,11 @@ The repo is still pre-implementation: a **mockup** plus the **authoritative spec
 
 When a question is about the scoring model, the source of truth is `scoring-model-spec.md` +
 `demo-fixtures.json` — not the mockup's rendering of it.
+
+The implemented app lives in `src/` (Vite + React + TS; the standalone `.html` is now reference
+only). Scoring engine: `src/scoring/`. Data-acquisition foundation (normalization, TIN, adapter
+contract, fetcher): `src/lib/`. Live recon-free adapters: `src/adapters/`. Fragile-source recon
+checklist: `recon/SOURCES-RECON.md`. See `README.md` for the full layout and run commands.
 
 ---
 
@@ -145,14 +154,14 @@ and edit the one that matches the code you changed.
 ### Static verification before push
 No trial-and-error on prod. **There is no dev/staging — a push to `main` is a production deploy**, so
 local verification is the only safety net. Run the project's check suite locally BEFORE every push;
-CI/CD deploy is not a debugger. The repo today is a fixtures-driven static mockup with **no build step** — there is
-nothing to verify beyond loading the HTML. Once the real app lands (Vite + React frontend; a
-scraping backend — plain HTTP for most sources, a Playwright headless pool only for
-Datalex/postback-style forms per `source-access-spec.md` §13), the pre-push suite is: `tsc` strict,
-`eslint --max-warnings=0`, `prettier --check`, the production build, `madge --circular`, and a
-load/smoke test. Backend language/tooling is not yet fixed (Playwright has Node/Python/.NET/Java
-bindings) — finalize the exact commands here when the stack is chosen. If a check fails, fix it
-locally and rerun.
+CI/CD deploy is not a debugger. The frontend is Vite + React + TS; the pre-push suite is
+`npm run typecheck` (tsc strict), `npm test` (vitest — engine + lib), and `npm run build`. The
+same three run in CI before the Pages deploy (`.github/workflows/deploy.yml`). eslint / prettier
+/ madge are not wired yet — add them as the codebase grows. The scraping backend (plain HTTP for
+most sources; a Playwright headless pool only for Datalex/postback-style forms per
+`source-access-spec.md` §13) is not built yet; its tooling lands with it. If a check fails, fix it
+locally and rerun. Adapter network calls are validated by `tools/smoke-adapters.ts`, not the
+deterministic unit suite.
 
 ---
 

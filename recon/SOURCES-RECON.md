@@ -1,0 +1,83 @@
+# Source recon — fragile [R] adapters
+
+Operationalizes `source-access-spec.md` §14 into a per-source build checklist. These are the
+sources that need hands-on recon before an adapter can be written: forms, params, session
+behavior, and exact selectors. **None of these can be safely scraped blind** — that is why
+they are NOT in the overnight build (only the recon-free adapters — sanctions, WHOIS, MX —
+are live). Status legend: ☐ to do · ⚠ known constraint · 🔎 capture during recon.
+
+> Live probing (fetching each page and recording the real HTML/forms) is the next step and
+> should run from the eventual production IP — DigitalOcean datacenter IPs (Frankfurt/
+> Amsterdam) may be rate-limited or geo-filtered by .am government sites; verify, don't assume
+> (source-access-spec.md §13 legal/politeness note).
+
+---
+
+## e-register.am — State Register (registry, graph) · Epics B1, D3, E1
+Facts: F-REG-01..08, seeds F-GRA-01/02. **Backbone of identity.**
+- 🔎 Canonical search platform: `e-register.am` vs the newer `e-services.moj.am` (sole-proprietor
+  services already migrated). Which one serves company search at build time?
+- 🔎 Search request: GET vs POST, param names, viewstate/CSRF. Captcha on search? (historically none).
+- 🔎 Person/participant search availability and whether it is gated to the paid tier (if gated →
+  fall back to the BODS bulk route for the graph, E1).
+- ⚠ Query in **Armenian script** — transliteration search is unreliable (use `normalize.ts`).
+- ⚠ Free tier = basic card (F-REG-01/02/04/05 + basic BO). F-REG-06 shares, F-REG-08 history,
+  pledge detail need a **paid extract** (~3000 AMD, account + online payment) → D3.
+  - 🔎 Extract format (PDF vs HTML), whether an Armenian e-signature is required for mere extracts.
+
+## src.am — State Revenue Committee (tax) · Epic B2
+Facts: F-TAX-01 TIN+name, F-TAX-02 VAT, F-TAX-03 top-1000.
+- Page: `src.am/en/taxpayerSearchSystemPage/112` (EN shell; HY parallel). **[V]** searchable by
+  TIN / company name / director.
+- ⚠ Likely an ASP.NET app — 🔎 capture the full postback (viewstate) or drive headless.
+- 🔎 Top-1000 publication: no stable URL, posted per-period as news/PDF — locate current period
+  (check `petekamutner.am` too).
+- This + e-register is what **de-fuzzes** name-matched facts (locks the TIN).
+
+## datalex.am — Judicial portal (court) · Epic F1 — HARDEST
+Facts: F-CRT-01..04 (litigation, all instances, bankruptcy).
+- Page: `datalex.am/?app=AppCaseSearch`. **[V]** 2M+ cases, Armenian-only.
+- ⚠ Old portal: frame/app-parameter nav, **session-bound**, no stable deep links → **Playwright**.
+  Store extracted content, NOT URLs; link users to the search page.
+- ⚠ **Role classification is mandatory**: plaintiff vs defendant vs bankruptcy court drives
+  SN-01 vs WP-09 vs B-01 — never pass unclassified counts downstream.
+- 🔎 Build the claim-amount regex library from ~30 sample verdicts (Armenian legal boilerplate).
+- 🔎 Are case-view URLs replayable across sessions? (fixtures assume a query-style placeholder).
+- ⚠ Slowest, most fragile source — cache 12–24h, throttle, run async.
+
+## harkadir.am — DAHK / compulsory enforcement (enforcement) · Epic D1
+Facts: F-ENF-01 open proceedings — strongest free "won't pay" signal (→ blocker B-03).
+- 🔎 Locate the proceedings-search section (site restructured ≥ once) — path + params.
+- ⚠ Only **open** proceedings are exposed; closed history is not retrievable (why SN-02 was culled).
+- 🔎 Match by TIN where the form allows, else Armenian name + fuzzy post-filter.
+
+## azdarar.am — Official public notifications (notice) · Epic D2
+Facts: F-NTC-01 liquidation / creditor-call / reorg / capital-reduction (→ B-02, SN-04).
+- ⚠ Coverage complete by construction (statutory publication).
+- 🔎 Does search cover full text or titles only? If titles only, pull category feeds and grep locally.
+- 🔎 Classify into the four flag types by title keywords; TIN usually present in the notice text.
+
+## armeps.am / gnumner.am — Procurement (procurement) · Epic E2
+Facts: F-PRC-01 award wins by supplier (→ SP-03 evidence).
+- 🔎 Which surface exposes a **supplier-name search** vs requiring iteration over award notices?
+  (gnumner historically lists machine-readable announcements.)
+- Fallback: periodically ingest award announcements into a local index, query locally.
+
+## ajurd.am — Compulsory auctions (auction) · Epic E3
+Facts: F-AUC-01 assets under forced sale (→ SN-05).
+- 🔎 Debtor-name search vs listing iteration; lot page structure (debtor field).
+- ⚠ Low volume → daily full-listing ingest into a local index is simplest.
+
+## Pledge register (pledge) · Epic F2 — may be deferred
+Facts: F-PLG-01 movable pledges (→ SN-06, R-05).
+- ⚠ Access tier **unconfirmed**. 🔎 Determine if public or gated to banks/notaries.
+- If gated → move F-PLG-01 / SN-06 / R-05 to deferred and **drop the coverage denominator to 9**
+  (the engine's coverage accounting already supports a dynamic total).
+
+---
+
+## Recon-free (DONE / live this build)
+- **Sanctions** (OFAC SDN live; EU/UK next) — `src/adapters/sanctions.ts`
+- **WHOIS .am** (AMNIC :43) — `src/adapters/whois.ts`
+- **Email MX** (node:dns) — `src/adapters/mx.ts`
+- Validated by `tools/smoke-adapters.ts` (real inputs), not the deterministic unit suite.
