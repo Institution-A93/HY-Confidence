@@ -219,14 +219,14 @@
       "signals": [
         { "id": "CH-02", "grade": "strong", "polarity": "-", "weight_base": -6, "weight_effective": -6, "evidence": ["s08"], "note": "The number you were contacted from publicly belongs to a different company — Lori Trans Service LLC. Could be a broker or sister company; verify the relationship." },
         { "id": "WP-01", "grade": "weak", "polarity": "+", "weight_base": 4, "weight_effective": 4, "evidence": ["s07"], "note": "Website with 4-year archive history matching activity." },
-        { "id": "WP-07", "grade": "weak", "polarity": "+", "weight_base": 2, "weight_effective": 2, "evidence": ["s03"], "note": "Registered address stable since 2022." }
+        { "id": "WP-07", "grade": "weak", "polarity": "+", "weight_base": 2, "weight_effective": 1.4, "evidence": ["s03"], "note": "Registered address stable since 2022." }
       ],
       "rules_fired": [
-        { "id": "R-08", "effect": "registry signals damped ×0.7 where evidence is name-matched", "note": "Entity resolved by name, not TIN — registry facts marked fuzzy. Provide the TIN to firm these up." }
+        { "id": "R-08", "effect": "WP-07 damped ×0.7 (2 → 1.4) — its evidence is name-matched registry data", "note": "Entity resolved by name, not TIN, so registry-based signals are discounted. Provide the TIN to firm these up." }
       ],
       "verdict": {
         "state": "SCORED",
-        "score": 0,
+        "score": -1,
         "coverage": { "verified": 10, "total": 10 },
         "tier_map": { "T1": "green", "T2": "yellow", "T3": "yellow", "T4": "red" },
         "band_blur": 1,

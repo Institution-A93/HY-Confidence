@@ -14,10 +14,9 @@ function inputFor(f: Fixture): EngineInput {
   };
 }
 
-// The three fixtures whose authored numbers follow the spec exactly. spawn-hrazdan is
-// handled separately because the fixture lists R-08 as fired but did not apply the ×0.7
-// to WP-07's weight — see the dedicated test below.
-const EXACT = ["green-araks", "red-vanand", "yellow-sevan"];
+// All four fixtures now follow the spec exactly (spawn-hrazdan's WP-07 was reconciled to
+// the R-08 ×0.7 damping: weight 2 → 1.4, score → −1).
+const EXACT = ["green-araks", "red-vanand", "yellow-sevan", "spawn-hrazdan"];
 
 describe("scoring engine reproduces fixtures", () => {
   for (const id of EXACT) {
@@ -58,27 +57,12 @@ describe("scoring engine reproduces fixtures", () => {
   });
 });
 
-describe("spawn-hrazdan: engine is spec-correct where the fixture is loose", () => {
-  const f = fixtureById("spawn-hrazdan")!;
-  const v = f.verdict!;
-  const r = computeVerdict(inputFor(f));
-
-  it("state, tier_map and band_blur still match the fixture", () => {
-    expect(r.state).toBe(v.state);
-    expect(r.tier_map).toEqual(v.tier_map); // same band despite the score delta
-    expect(r.band_blur).toBe(v.band_blur);
-  });
-
-  // FINDING: the fixture lists R-08 as fired but left WP-07 at weight 2 (its evidence
-  // s03 is a fuzzy registry fact, so R-08 should damp it ×0.7 → 1.4). The engine applies
-  // the rule, yielding score −0.6 (→ −1) instead of the fixture's 0. The tier band is the
-  // same (−5…+8), so nothing visual changes — but the fixture's number is internally
-  // inconsistent. Flagged for the user to reconcile in demo-fixtures.json.
-  it("applies R-08 to WP-07 (which the fixture did not)", () => {
+describe("spawn-hrazdan: R-08 fuzzy damping", () => {
+  const r = computeVerdict(inputFor(fixtureById("spawn-hrazdan")!));
+  it("fires R-08 and damps WP-07 from 2 to 1.4 (name-matched registry evidence)", () => {
     expect(r.rulesFired).toContain("R-08");
     expect(r.signals.find((s) => s.id === "WP-07")!.weight_effective).toBe(1.4);
     expect(r.score).toBe(-1);
-    expect(v.score).toBe(0); // the fixture's authored, un-damped value
   });
 });
 
