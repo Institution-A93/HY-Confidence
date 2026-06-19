@@ -8,7 +8,7 @@ import { FIXTURES } from "./fixtures";
 import { factById } from "./components";
 import { BACKEND_URL } from "./config";
 import { InputScreen, ResolveScreen, CheckingScreen, VerdictScreen } from "./screens";
-import type { CheckInput, Fixture, MissingItem, SpawnOffer } from "./types";
+import type { CheckInput, Candidate, Fixture, MissingItem, SpawnOffer } from "./types";
 
 type Screen = "INPUT" | "RESOLVE" | "CHECKING" | "VERDICT" | "LIVELOAD";
 type Tab = { key: string; kind: "verdict"; fixture: Fixture } | { key: string; kind: "stub"; target: SpawnOffer };
@@ -40,6 +40,21 @@ function makeNoMatch(input: CheckInput): Fixture {
       candidates_reserve: [],
       selected: { tin: input.tin || "—", name_hy: input.entity_name || input.tin || "—", name_en: input.entity_name || "" },
     },
+    facts: [],
+    signals: [],
+    rules_fired: [],
+    verdict: null,
+  };
+}
+
+/* live-resolve: wrap backend candidates in a fixture so the S2 Resolve screen renders them */
+function makeLiveResolveFixture(input: CheckInput, candidates: Candidate[]): Fixture {
+  return {
+    id: "live-resolve:" + (input.entity_name || ""),
+    label: "",
+    demonstrates: [],
+    input,
+    resolution: { ambiguous: true, candidates, candidates_reserve: [] },
     facts: [],
     signals: [],
     rules_fired: [],
@@ -380,6 +395,8 @@ export default function App() {
   const [modal, setModal] = useState<string | null>(null);
   const [liveMode, setLiveMode] = useState(false);
   const [liveError, setLiveError] = useState<string | null>(null);
+  const [liveInput, setLiveInput] = useState<CheckInput | null>(null);
+  const [liveResolving, setLiveResolving] = useState(false);
 
   function startCheck(fixture: Fixture) {
     setRun(fixture);
@@ -388,7 +405,9 @@ export default function App() {
   }
   function onSubmit(input: CheckInput) {
     if (liveMode) {
-      runLiveCheck(input);
+      // TIN given → check it directly; name only → resolve to ranked candidates first.
+      if ((input.tin || "").trim()) runLiveCheck(input);
+      else runLiveResolve(input);
       return;
     }
     const fx = matchFixture(input);
@@ -401,10 +420,35 @@ export default function App() {
     }
   }
 
-  // Live mode: POST the input to the backend, which runs the real adapters and returns a
-  // Fixture-shaped result we render exactly like a demo vignette.
+  // Live: resolve a name (any script) to ranked candidates via src.am, then show the S2 pick.
+  async function runLiveResolve(input: CheckInput) {
+    setLiveError(null);
+    setLiveResolving(true);
+    setLiveInput(input);
+    setActiveKey(null);
+    setRun(null);
+    setScreen("LIVELOAD");
+    try {
+      const res = await fetch(BACKEND_URL + "/resolve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: input.entity_name }),
+      });
+      if (!res.ok) throw new Error("backend " + res.status);
+      const { candidates } = (await res.json()) as { candidates: Candidate[] };
+      setRun(candidates && candidates.length ? makeLiveResolveFixture(input, candidates) : makeNoMatch(input));
+      setScreen("RESOLVE");
+    } catch {
+      setLiveResolving(false);
+      setLiveError(t("live_error"));
+      setScreen("INPUT");
+    }
+  }
+
+  // Live: run the real check — by TIN once a candidate is picked, or directly when a TIN was given.
   async function runLiveCheck(input: CheckInput) {
     setLiveError(null);
+    setLiveResolving(false);
     setActiveKey(null);
     setRun(null);
     setScreen("LIVELOAD");
@@ -420,6 +464,16 @@ export default function App() {
     } catch {
       setLiveError(t("live_error"));
       setScreen("INPUT");
+    }
+  }
+
+  // S2 pick: live → check the chosen TIN (carry website/email/person); demo → just proceed.
+  function onResolvePick(tin: string) {
+    if (liveResolving) {
+      const base = liveInput || { entity_name: "", tin: null, person_first_name: null, phone: null };
+      runLiveCheck({ ...base, tin });
+    } else {
+      onResolved();
     }
   }
   function onPrefill(fx: Fixture) {
@@ -590,7 +644,7 @@ export default function App() {
           {!showStub && screen === "RESOLVE" && run && (
             <ResolveScreen
               fixture={run}
-              onPick={onResolved}
+              onPick={onResolvePick}
               onRefine={onRefineFromResolve}
               onAddTin={onRefineFromResolve}
               onProceed={onProceedUnverifiable}
