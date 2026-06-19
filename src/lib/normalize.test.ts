@@ -8,6 +8,9 @@ import {
   latinToArmenian,
   armenianQueryCandidates,
   hasArmenian,
+  latinToArmenianVariants,
+  levenshtein,
+  nameSimilarity,
 } from "./normalize";
 
 describe("HY→Latin transliteration (clean cases)", () => {
@@ -48,6 +51,22 @@ describe("Latin/Cyrillic → Armenian (best-effort query candidates)", () => {
   });
   it("produces an Armenian candidate for Latin input", () => {
     expect(armenianQueryCandidates("Grand")).toEqual(["գրանդ"]);
+  });
+});
+
+describe("fuzzy resolver building blocks", () => {
+  it("variant set contains the clean transliteration of a token", () => {
+    expect(latinToArmenianVariants("grand")).toContain("գրանդ");
+  });
+  it("levenshtein basics", () => {
+    expect(levenshtein("kitten", "sitting")).toBe(3);
+    expect(levenshtein("abc", "abc")).toBe(0);
+  });
+  it("ranks the right company high across scripts (Grand Candy)", () => {
+    const good = nameSimilarity("Grand Candy", "«ԳՐԱՆԴ ՔԵՆԴԻ»");
+    const bad = nameSimilarity("Grand Candy", "«Արարատ Ցեմենտ»");
+    expect(good).toBeGreaterThan(0.6);
+    expect(good).toBeGreaterThan(bad);
   });
 });
 

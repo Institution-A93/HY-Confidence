@@ -157,6 +157,79 @@ export function hasArmenian(s: string): boolean {
   return ARMENIAN_RE.test(s);
 }
 
+// Latin letters whose Armenian mapping is genuinely ambiguous (one Latin char → several
+// Armenian consonants/vowels). Branching here lets the variant set CONTAIN the correct
+// spelling (e.g. "candy" → ... "քենդի" via c→ք, a→ե) even though no single guess hits it.
+const LAT_AMBIG_DI: Record<string, string[]> = {
+  ch: ["չ", "ճ", "ջ"], ts: ["ց", "ծ"], gh: ["ղ"], zh: ["ժ"], kh: ["խ"], ph: ["փ"], th: ["թ"], sh: ["շ"], dz: ["ձ"],
+};
+const LAT_AMBIG_SINGLE: Record<string, string[]> = {
+  a: ["ա", "ե"], e: ["ե", "է"], o: ["ո", "օ"],
+  t: ["տ", "թ"], k: ["կ", "ք"], c: ["կ", "ք", "ց"], p: ["պ", "փ"], b: ["բ", "պ"],
+  g: ["գ", "ք"], d: ["դ", "տ"], z: ["զ", "ձ"], r: ["ր", "ռ"], y: ["յ", "ի"],
+};
+
+// Best-effort Armenian-script candidates for a Latin/Cyrillic word, branching the ambiguous
+// letters. Capped to keep it from exploding combinatorially.
+export function latinToArmenianVariants(input: string, max = 8): string[] {
+  const s = cyrToLat(input).toLowerCase();
+  let forms: string[] = [""];
+  const push = (alts: string[]) => {
+    const next: string[] = [];
+    for (const f of forms) for (const a of alts) next.push(f + a);
+    forms = next.length > max ? next.slice(0, max) : next;
+  };
+  let i = 0;
+  while (i < s.length) {
+    const two = s.slice(i, i + 2);
+    if (LAT_AMBIG_DI[two]) {
+      push(LAT_AMBIG_DI[two]);
+      i += 2;
+      continue;
+    }
+    const dg = LAT_DIGRAPHS.find(([l]) => l === two);
+    if (dg) {
+      push([dg[1]]);
+      i += 2;
+      continue;
+    }
+    const ch = s[i];
+    push(LAT_AMBIG_SINGLE[ch] ?? [LAT_SINGLE[ch] ?? ch]);
+    i++;
+  }
+  return Array.from(new Set(forms));
+}
+
+// Levenshtein edit distance — used to rank candidates by comparing the user's Latin input
+// against each candidate's Armenian name transliterated back to Latin (the reliable
+// direction), so the match is position-agnostic across the whole name.
+export function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  let cur = new Array(n + 1);
+  for (let i = 1; i <= m; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    [prev, cur] = [cur, prev];
+  }
+  return prev[n];
+}
+
+// Similarity in [0,1] of two names across scripts: compare the user's Latin key against the
+// candidate name transliterated HY→Latin. 1 = identical, 0 = fully different.
+export function nameSimilarity(latinQuery: string, candidateName: string): number {
+  const a = toLatinKey(latinQuery);
+  const b = toLatinKey(candidateName);
+  if (!a || !b) return 0;
+  return 1 - levenshtein(a, b) / Math.max(a.length, b.length);
+}
+
 // Query candidates in Armenian script for a name in any script. Armenian input passes
 // through unchanged; Latin/Cyrillic input is transliterated (best-effort).
 export function armenianQueryCandidates(name: string): string[] {

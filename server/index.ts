@@ -10,7 +10,7 @@ import { createServer } from "node:http";
 import { sanctionsAdapter } from "../src/adapters/sanctions";
 import { whoisAdapter } from "../src/adapters/whois";
 import { mxAdapter } from "../src/adapters/mx";
-import { srcAdapter } from "../src/adapters/srcam";
+import { srcAdapter, resolveBySrc } from "../src/adapters/srcam";
 import { resilientFetch, TtlCache, CircuitBreaker } from "../src/lib/fetcher";
 import { COVERAGE_DOMAINS } from "../src/lib/adapter";
 import type { AdapterResult, Subject } from "../src/lib/adapter";
@@ -148,6 +148,20 @@ function send(res: import("node:http").ServerResponse, code: number, body: unkno
 createServer((req, res) => {
   if (req.method === "OPTIONS") return send(res, 204, {});
   if (req.method === "GET" && req.url === "/health") return send(res, 200, { ok: true });
+  if (req.method === "POST" && req.url === "/resolve") {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", async () => {
+      try {
+        const input = body ? JSON.parse(body) : {};
+        const candidates = await resolveBySrc(String(input.name || input.entity_name || ""));
+        send(res, 200, { candidates });
+      } catch (e) {
+        send(res, 500, { error: e instanceof Error ? e.message : String(e) });
+      }
+    });
+    return;
+  }
   if (req.method === "POST" && req.url === "/check") {
     let body = "";
     req.on("data", (c) => (body += c));

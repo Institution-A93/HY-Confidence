@@ -1,17 +1,24 @@
-// src.am — State Revenue Committee taxpayer search. Live, real data. The site is a Laravel
-// app; POST /en/taxpayerSearchData (CSRF + session cookie) returns the taxpayer record.
-// Recon (2026-06-19) found it returns far more than tax: status, registration date, legal
-// form and address too — so this single source covers F-TAX-01/02 AND the registry basics
-// (F-REG-01/02/03/04), which matters because e-register itself is behind a Radware bot wall.
-// Node-only (node:https).
+// src.am — State Revenue Committee taxpayer search. Our primary source of truth / identity
+// resolver: name (any script) → candidates → TIN + canonical Armenian name + status/date/
+// form/address/VAT. POST /en/taxpayerSearchData (CSRF + session cookie) returns the record.
+// e-register is Radware-walled, so this also supplies the registry basics. Node-only.
 import { request } from "node:https";
 import type { AdapterResult, SourceAdapter, Subject } from "../lib/adapter";
 import { makeFact } from "../lib/adapter";
-import { armenianQueryCandidates } from "../lib/normalize";
+import type { Candidate } from "../types";
+import {
+  hasArmenian,
+  toLatinTokens,
+  latinToArmenian,
+  latinToArmenianVariants,
+  translitHyToLatin,
+  nameSimilarity,
+} from "../lib/normalize";
 
 const HOST = "src.am";
 const PAGE = "/en/taxpayerSearchSystemPage/112";
 const SEARCH = "/en/taxpayerSearchData";
+const URL = `https://src.am${PAGE}`;
 const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36";
 
 interface Rec {
@@ -40,9 +47,91 @@ function httpsReq(opts: import("node:https").RequestOptions, body?: string): Pro
   });
 }
 
-function cookieHeader(setCookie: string[] | undefined): string {
-  if (!setCookie) return "";
-  return setCookie.map((c) => c.split(";")[0]).join("; ");
+interface Session {
+  csrf: string;
+  cookie: string;
+}
+
+// One GET gets a CSRF token + session cookie reusable for many search POSTs.
+async function getSession(): Promise<Session> {
+  const page = await httpsReq({ host: HOST, path: PAGE, method: "GET", headers: { "User-Agent": UA } });
+  const csrf = page.body.match(/name="csrf-token"[^>]*content="([^"]+)"/i)?.[1];
+  const cookie = (page.headers["set-cookie"] || []).map((c) => c.split(";")[0]).join("; ");
+  if (!csrf || !cookie) throw new Error("could not obtain CSRF/session");
+  return { csrf, cookie };
+}
+
+async function searchByForm(s: Session, form: string): Promise<Rec[]> {
+  const resp = await httpsReq(
+    {
+      host: HOST,
+      path: SEARCH,
+      method: "POST",
+      headers: {
+        "User-Agent": UA,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Content-Length": Buffer.byteLength(form),
+        "X-CSRF-TOKEN": s.csrf,
+        "X-Requested-With": "XMLHttpRequest",
+        Cookie: s.cookie,
+      },
+    },
+    form,
+  );
+  return (JSON.parse(resp.body) as { data?: Rec[] }).data || [];
+}
+
+// Resolver: name in any script → ranked candidate companies. Fuzzy happens ONCE here; the
+// query branches ambiguous Latin letters to surface the entity from src.am's substring
+// search, then candidates are re-ranked by Latin-space similarity (HY→Latin is reliable).
+export async function resolveBySrc(name: string, max = 8): Promise<Candidate[]> {
+  const q = (name || "").trim();
+  if (!q) return [];
+
+  // build a small set of Armenian-script query strings
+  const queries = new Set<string>();
+  if (hasArmenian(q)) {
+    queries.add(q);
+  } else {
+    queries.add(latinToArmenian(q)); // whole-name single guess
+    for (const tok of toLatinTokens(q)) for (const v of latinToArmenianVariants(tok, 4)) queries.add(v);
+  }
+  const queryList = Array.from(queries).slice(0, 8);
+
+  const session = await getSession();
+  const byTin = new Map<string, Rec>();
+  for (const form of queryList.map((x) => `name=${encodeURIComponent(x)}`)) {
+    try {
+      for (const rec of await searchByForm(session, form)) byTin.set(rec.tin, rec);
+    } catch {
+      /* skip a failed sub-query */
+    }
+  }
+
+  return Array.from(byTin.values())
+    .map((rec) => ({ rec, score: nameSimilarity(q, rec.name) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, max)
+    .map(({ rec }) => ({
+      tin: rec.tin,
+      name_hy: rec.name,
+      name_en: translitHyToLatin(rec.name),
+      status: rec.status,
+      registration_date: rec.submitDate,
+      address: rec.address,
+    }));
+}
+
+function factsFromRecord(rec: Rec, now: string, match: "exact" | "fuzzy") {
+  const facts = [
+    makeFact({ catalog_id: "F-TAX-01", subject: rec.tin, domain: "tax", field: "tin_name_match", value: `${rec.name} — TIN ${rec.tin}`, source: "SRC (src.am)", url: URL, fetched_at: now, match }),
+    makeFact({ catalog_id: "F-TAX-02", subject: rec.tin, domain: "tax", field: "vat_status", value: rec.isVATPayer ? `VAT payer (${rec.ModeTaxation || "ԱԱՀ"})` : "not a VAT payer", source: "SRC (src.am)", url: URL, fetched_at: now, match }),
+    makeFact({ catalog_id: "F-REG-01", subject: rec.tin, domain: "registry", field: "legal_status", value: rec.status || "unknown", source: "SRC (src.am)", url: URL, fetched_at: now, match }),
+  ];
+  if (rec.submitDate) facts.push(makeFact({ catalog_id: "F-REG-02", subject: rec.tin, domain: "registry", field: "registration_date", value: rec.submitDate, source: "SRC (src.am)", url: URL, fetched_at: now, match }));
+  if (rec.legalStatus) facts.push(makeFact({ catalog_id: "F-REG-03", subject: rec.tin, domain: "registry", field: "legal_form", value: rec.legalStatus, source: "SRC (src.am)", url: URL, fetched_at: now, match }));
+  if (rec.address) facts.push(makeFact({ catalog_id: "F-REG-04", subject: rec.tin, domain: "registry", field: "address", value: rec.address, source: "SRC (src.am)", url: URL, fetched_at: now, match }));
+  return facts;
 }
 
 export const srcAdapter: SourceAdapter = {
@@ -52,56 +141,21 @@ export const srcAdapter: SourceAdapter = {
     const query = (subject.tin || subject.name || "").trim();
     if (!query) return { domain: "tax", status: "verified_empty", facts: [], fetched_at: now, source: this.source };
     try {
-      // 1. GET the page for the CSRF token + session cookie
-      const page = await httpsReq({ host: HOST, path: PAGE, method: "GET", headers: { "User-Agent": UA } });
-      const csrf = page.body.match(/name="csrf-token"[^>]*content="([^"]+)"/i)?.[1];
-      const cookie = cookieHeader(page.headers["set-cookie"]);
-      if (!csrf || !cookie) throw new Error("could not obtain CSRF/session");
-
-      // 2. POST the search. By TIN if given (script-agnostic); else try Armenian-script
-      // candidates, transliterating Latin/Cyrillic input (best effort — TIN is reliable).
-      const baseHeaders = {
-        "User-Agent": UA,
-        "Content-Type": "application/x-www-form-urlencoded",
-        "X-CSRF-TOKEN": csrf,
-        "X-Requested-With": "XMLHttpRequest",
-        Cookie: cookie,
-      };
-      const searchOne = async (form: string): Promise<Rec[]> => {
-        const resp = await httpsReq(
-          { host: HOST, path: SEARCH, method: "POST", headers: { ...baseHeaders, "Content-Length": Buffer.byteLength(form) } },
-          form,
-        );
-        return (JSON.parse(resp.body) as { data?: Rec[] }).data || [];
-      };
+      const session = await getSession();
       const queries = subject.tin
         ? [`tin=${encodeURIComponent(subject.tin)}`]
-        : armenianQueryCandidates(query).map((c) => `name=${encodeURIComponent(c)}`);
+        : (hasArmenian(query) ? [query] : [latinToArmenian(query)]).map((c) => `name=${encodeURIComponent(c)}`);
       let data: Rec[] = [];
-      for (const q of queries) {
-        data = await searchOne(q);
+      for (const form of queries) {
+        data = await searchByForm(session, form);
         if (data.length) break;
       }
       if (data.length === 0) {
-        // queried successfully, nothing matched — a finding, not a failure
-        const f = makeFact({ catalog_id: "F-TAX-01", subject: query, domain: "tax", field: "tin_name_match", value: "no taxpayer found", source: this.source, url: `https://src.am${PAGE}`, fetched_at: now });
+        const f = makeFact({ catalog_id: "F-TAX-01", subject: query, domain: "tax", field: "tin_name_match", value: "no taxpayer found", source: this.source, url: URL, fetched_at: now });
         return { domain: "tax", status: "verified_empty", facts: [f], fetched_at: now, source: this.source };
       }
-
-      const rec = data[0];
-      const exact = !!subject.tin || data.length === 1;
-      const match = exact ? "exact" : "fuzzy";
-      const url = `https://src.am${PAGE}`;
-      const facts = [
-        makeFact({ catalog_id: "F-TAX-01", subject: rec.tin, domain: "tax", field: "tin_name_match", value: `${rec.name} — TIN ${rec.tin}`, source: this.source, url, fetched_at: now, match }),
-        makeFact({ catalog_id: "F-TAX-02", subject: rec.tin, domain: "tax", field: "vat_status", value: rec.isVATPayer ? `VAT payer (${rec.ModeTaxation || "ԱԱՀ"})` : "not a VAT payer", source: this.source, url, fetched_at: now, match }),
-        makeFact({ catalog_id: "F-REG-01", subject: rec.tin, domain: "registry", field: "legal_status", value: rec.status || "unknown", source: this.source, url, fetched_at: now, match }),
-      ];
-      if (rec.submitDate) facts.push(makeFact({ catalog_id: "F-REG-02", subject: rec.tin, domain: "registry", field: "registration_date", value: rec.submitDate, source: this.source, url, fetched_at: now, match }));
-      if (rec.legalStatus) facts.push(makeFact({ catalog_id: "F-REG-03", subject: rec.tin, domain: "registry", field: "legal_form", value: rec.legalStatus, source: this.source, url, fetched_at: now, match }));
-      if (rec.address) facts.push(makeFact({ catalog_id: "F-REG-04", subject: rec.tin, domain: "registry", field: "address", value: rec.address, source: this.source, url, fetched_at: now, match }));
-
-      return { domain: "tax", status: "verified", facts, fetched_at: now, source: this.source };
+      const match = subject.tin || data.length === 1 ? "exact" : "fuzzy";
+      return { domain: "tax", status: "verified", facts: factsFromRecord(data[0], now, match), fetched_at: now, source: this.source };
     } catch (e) {
       return { domain: "tax", status: "unavailable", facts: [], fetched_at: now, source: this.source, error: e instanceof Error ? e.message : String(e) };
     }
