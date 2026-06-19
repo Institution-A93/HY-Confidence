@@ -42,8 +42,11 @@ src/
     tin.ts                               TIN format validation (check digit deferred to recon)
     adapter.ts                           fetch(subject)→Fact[] contract + coverage accounting
     fetcher.ts                           TTL cache + circuit breaker + health canary
-  adapters/                              live, recon-free sources (node-only; NOT bundled in the UI)
-    sanctions.ts, whois.ts, mx.ts        OFAC SDN, AMNIC WHOIS, email MX
+  adapters/                              live sources (node-only; NOT bundled in the UI)
+    sanctions.ts, whois.ts, mx.ts        OFAC SDN, AMNIC WHOIS, email MX (recon-free)
+    srcam.ts                             SRC tax + registry basics + identity resolver (source of truth)
+    azdarar.ts                           Azdarar public notices → liquidation/bankruptcy (name-keyed)
+    datalex.ts                           Datalex courts → plaintiff/defendant/bankruptcy (name-keyed)
 recon/SOURCES-RECON.md                   per-source build checklist for the fragile [R] scrapers
 tools/                                   one-shot scripts (CSS extraction, adapter smoke)
 Counterparty Check (standalone).html     the original Claude Design mockup (reference)
@@ -51,11 +54,11 @@ Counterparty Check (standalone).html     the original Claude Design mockup (refe
 
 ## Status
 
-| Real (works now) | Live, recon-free | Pending (needs recon / your input) |
+| Real (works now) | Live data sources (≈6/10 domains) | Pending (needs recon / your input) |
 |---|---|---|
-| Scoring engine over all 4 fixtures | Sanctions (OFAC SDN) | Registry, tax, court, enforcement, |
-| Fixture-driven UI (S1–S4) | WHOIS (.am) | notices, procurement, auction, pledge |
-| Export to Markdown / CSV | Email MX / DNS | scrapers — see recon/SOURCES-RECON.md |
+| Scoring engine over all 4 fixtures | Sanctions (OFAC), WHOIS (.am), Email MX | Enforcement (cesa.am — captcha), |
+| Fixture-driven UI (S1–S4) | SRC tax + registry + resolver (src.am) | auction (debtor not public → via cesa), |
+| Live `/check` + `/resolve` end-to-end | Notices (Azdarar), Courts (Datalex) | procurement, pledge, ownership graph |
 
 The frontend renders the Fact/Verdict JSON contract; the scoring engine is pure logic over
 Facts (client- or server-side). Data acquisition for the fragile sources needs a backend and

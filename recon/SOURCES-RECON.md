@@ -121,16 +121,40 @@ Facts: F-TAX-01 TIN+name, F-TAX-02 VAT, F-TAX-03 top-1000.
   (check `petekamutner.am` too).
 - This + e-register is what **de-fuzzes** name-matched facts (locks the TIN).
 
-## datalex.am — Judicial portal (court) · Epic F1 — HARDEST
-Facts: F-CRT-01..04 (litigation, all instances, bankruptcy).
-- Page: `datalex.am/?app=AppCaseSearch`. **[V]** 2M+ cases, Armenian-only.
-- ⚠ Old portal: frame/app-parameter nav, **session-bound**, no stable deep links → **Playwright**.
-  Store extracted content, NOT URLs; link users to the search page.
-- ⚠ **Role classification is mandatory**: plaintiff vs defendant vs bankruptcy court drives
-  SN-01 vs WP-09 vs B-01 — never pass unclassified counts downstream.
-- 🔎 Build the claim-amount regex library from ~30 sample verdicts (Armenian legal boilerplate).
-- 🔎 Are case-view URLs replayable across sessions? (fixtures assume a query-style placeholder).
-- ⚠ Slowest, most fragile source — cache 12–24h, throttle, run async.
+## datalex.am — Judicial portal (court) · Epic F1 — ✅ BUILT & LIVE (no browser needed)
+Facts: F-CRT-01 (plaintiff), F-CRT-02 (defendant), F-CRT-03 (bankruptcy debtor). Adapter:
+`src/adapters/datalex.ts`. **Playwright turned out NOT to be needed** — the recon below replaced
+the "hardest, headless" assumption with a plain JSON API.
+- Page: `datalex.am/?app=AppCaseSearch` (PHP, PHPSESSID). 2M+ cases, Armenian-only. BARL framework.
+- **Transport (the win):** the results grid is a **jqGrid backed by an Elasticsearch JSON API at
+  `POST /json.php`**. One GET of the search page sets a PHPSESSID; each search is a POST with
+  `function=getGridDataList`, `name=Common/ModGrid`, `type=modules`, and
+  `arg=JSON([filterData, {page,rows,sidx,sord}, gridSearchDescription, false])` + a
+  `module_params` JSON (gridSearchDescription/caseTypeID per case-type tab). Response is JSON:
+  `result.totalCount` + `result.data[]` rows with STRUCTURED fields (`claimant_name`,
+  `respondant_name`, `case_number`, `case_external_id`, `creation_datetime`). No headless, no
+  postback, no frames. AJAXURL = `https://datalex.am:443/json.php`.
+- **Role classification is structural (mandatory rule satisfied at the query):** the form has
+  separate `data[claimant_organization_name]` / `data[respondant_organization_name]` fields, so we
+  set the role by WHICH field carries the name — claimant=plaintiff (F-CRT-01→WP-09),
+  respondant=defendant (F-CRT-02→SN-01). Confirmed on real data: tax authority as *claimant* on the
+  bankruptcy tab → 6114 cases, each `respondant` = the bankrupt company (case# `ՍնԴ/…`); so
+  **respondant-on-bankruptcy = the debtor → B-01**. Never parse role out of results.
+- **Case-type tabs** (the first select; drives `gridSearchDescription`+`caseTypeID`): civil
+  (`datalex_civ_case_info`, 2), criminal, administrative, payment_order (4), **bankruptcy**
+  (`datalex_bankr_case_info`, 3), corruption_civil/criminal. Bankruptcy search REQUIRES a party
+  filter (empty filter → 0).
+- **Recency** comes from the case number's trailing 2-digit year (`ԵԴ/0254/02/26` → 2026) — more
+  reliable than `creation_datetime`, which is null on bankruptcy rows. Feeds R-06 decay + the B-01
+  "open" inference (≤4y).
+- ⚠ **Case DETAIL (openCase) is CAPTCHA-GATED** ("Մուտքագրեք նկարի տեքստը"). So claim AMOUNTS,
+  verdict OUTCOMES, and explicit open/closed STATUS are NOT retrievable without a solver. v1 uses
+  counts + recency only: SN-01 not amount-scaled, WP-09 can't confirm "wins", B-01 infers "open"
+  from recency. Case URLs `?app=AppCaseSearch&case_id=<external_id>` ARE replayable (link the user;
+  they solve the captcha to read the detail).
+- Follow-ups: payment_order tab (debt-collection defendant — strong SN-01 signal); person/sole-
+  proprietor party search (first+last name fields); token-containment guard for tighter matching;
+  claim-amount parsing if/when the detail captcha is solved.
 
 ## harkadir.am — DAHK / compulsory enforcement (enforcement) · Epic D1
 Facts: F-ENF-01 open proceedings — strongest free "won't pay" signal (→ blocker B-03).

@@ -5,6 +5,7 @@
 import { whoisAdapter } from "../src/adapters/whois.ts";
 import { mxAdapter } from "../src/adapters/mx.ts";
 import { sanctionsAdapter } from "../src/adapters/sanctions.ts";
+import { datalexAdapter } from "../src/adapters/datalex.ts";
 import type { Subject } from "../src/lib/adapter.ts";
 
 const now = () => new Date().toISOString();
@@ -28,6 +29,13 @@ await run("Sanctions — Vladimir Putin (expect HIT)", () =>
 );
 await run("Sanctions — Vahram Petrosyan (expect clean)", () =>
   sanctionsAdapter.fetch({ person: "Vahram Petrosyan" }, now()),
+);
+// Court: name-keyed, so we pass canonical Armenian names directly (as the two-phase /check would).
+await run("Datalex — Հայաստանի էլեկտրական ցանցեր (expect plaintiff F-CRT-01)", () =>
+  datalexAdapter.fetch({ name: "Հայաստանի էլեկտրական ցանցեր" }, now()),
+);
+await run("Datalex — Թոփ Ավտո ՍՊԸ (expect bankruptcy F-CRT-03 → B-01)", () =>
+  datalexAdapter.fetch({ name: "Թոփ Ավտո ՍՊԸ" }, now()),
 );
 
 console.log("\nsmoke done.");

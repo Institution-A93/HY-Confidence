@@ -12,6 +12,7 @@ import { whoisAdapter } from "../src/adapters/whois";
 import { mxAdapter } from "../src/adapters/mx";
 import { srcAdapter, resolveBySrc } from "../src/adapters/srcam";
 import { azdararAdapter } from "../src/adapters/azdarar";
+import { datalexAdapter } from "../src/adapters/datalex";
 import { resilientFetch, TtlCache, CircuitBreaker } from "../src/lib/fetcher";
 import { COVERAGE_DOMAINS } from "../src/lib/adapter";
 import { stripLegal } from "../src/lib/normalize";
@@ -27,10 +28,12 @@ const breaker = new CircuitBreaker();
 // Keyed adapters run with the raw subject (TIN / email / website / person).
 const KEYED_ADAPTERS = [sanctionsAdapter, whoisAdapter, mxAdapter];
 // Name-keyed adapters need the CANONICAL Armenian name, so they run after src.am resolves it.
-const NAME_KEYED_ADAPTERS = [azdararAdapter];
+const NAME_KEYED_ADAPTERS = [azdararAdapter, datalexAdapter];
 
-function mkSignal(id: string, grade: Signal["grade"], polarity: Signal["polarity"], evidence: string[], note: string): Signal {
-  const w = grade === "blocker" ? null : baseWeightFor(id);
+// weightOverride lets a detector pass a scaled base weight (e.g. SN-01 after R-06 recency decay);
+// the engine still applies R-08/R-01 on top of whatever weight_base we hand it.
+function mkSignal(id: string, grade: Signal["grade"], polarity: Signal["polarity"], evidence: string[], note: string, weightOverride?: number): Signal {
+  const w = grade === "blocker" ? null : weightOverride ?? baseWeightFor(id);
   return { id, grade, polarity, weight_base: w, weight_effective: w, evidence, note };
 }
 
@@ -87,6 +90,47 @@ function deriveSignals(facts: Fact[]): Signal[] {
       out.push(mkSignal("SN-04", "strong", "-", [notice.fact_id], "Creditor-call notice published."));
     }
   }
+
+  // Court (Datalex). Role is already classified by the adapter's role-keyed queries, so we map
+  // facts straight to signals: defendant → SN-01, plaintiff → WP-09 (R-04 keeps them separate by
+  // construction), bankruptcy debtor → B-01 when open. Amounts/outcomes are captcha-gated, so
+  // SN-01 scales by count + recency only.
+  const nowYear = new Date().getFullYear();
+  // R-06 court recency decay: ×1.0 ≤12mo, ×0.6 ≤24mo, ×0.3 ≤36mo, 0 beyond. Unknown year → mid.
+  const decay = (yr: number | null) => (yr === null ? 0.6 : nowYear - yr <= 1 ? 1 : nowYear - yr <= 2 ? 0.6 : nowYear - yr <= 3 ? 0.3 : 0);
+  const yearIn = (v: string) => Number((v.match(/most recent (\d{4})/) || [])[1]) || null;
+
+  const def = f("F-CRT-02");
+  if (def) {
+    const count = Number((def.value.match(/Defendant in (\d+)/) || [])[1] || 0);
+    const yr = yearIn(def.value);
+    const d = decay(yr);
+    if (d > 0) {
+      // SN-01 −10…−15: lean to −15 with several active suits, else −12; then recency-decayed.
+      const base = (count >= 3 ? -15 : -12) * d;
+      out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `Defendant in ${count} civil case(s)${yr ? ` (most recent ${yr})` : ""} — active litigation exposure.`, base));
+    } else if (count === 1) {
+      out.push(mkSignal("WN-07", "weak", "-", [def.fact_id], "A single, dated defendant case (>24 months old)."));
+    }
+  }
+
+  const pla = f("F-CRT-01");
+  if (pla) {
+    const count = Number((pla.value.match(/Plaintiff in (\d+)/) || [])[1] || 0);
+    out.push(mkSignal("WP-09", "weak", "+", [pla.fact_id], `Plaintiff in ${count} collection case(s) — actively enforces its own receivables.`));
+  }
+
+  const bkr = f("F-CRT-03");
+  if (bkr) {
+    const yr = yearIn(bkr.value);
+    // B-01 needs OPEN bankruptcy. We infer "open" from recency (≤4y): Armenian corporate
+    // bankruptcies run multi-year, so a recent filing is almost certainly still live. Older ones
+    // are NOT blocked — they could be discharged, which we cannot confirm behind the detail
+    // captcha — so a stale bankruptcy stays visible as the F-CRT-03 fact without vetoing the score.
+    if (yr !== null && nowYear - yr <= 4) {
+      out.push(mkSignal("B-01", "blocker", "-", [bkr.fact_id], `Appears as the debtor in a bankruptcy case (filed ${yr}) — open insolvency proceedings.`));
+    }
+  }
   return out;
 }
 
@@ -96,13 +140,13 @@ function buildNarrative(signals: Signal[], verified: number, sourcesText: string
   if (blocker) lines.push({ text: "BLOCKED: " + blocker.note, evidence: blocker.evidence });
   for (const s of signals.filter((x) => x.grade !== "blocker")) lines.push({ text: s.note, evidence: s.evidence });
   lines.push({
-    text: `Live check covered ${verified} of 10 domains (${sourcesText}). Court, enforcement, procurement, auction and pledge are not wired yet — treat this as a partial, low-confidence read.`,
+    text: `Live check covered ${verified} of 10 domains (${sourcesText}). Enforcement, procurement, auction and pledge are not wired yet — treat this as a partial read.`,
     evidence: [],
   });
   return lines;
 }
 
-const DOMAIN_LABEL: Record<string, string> = { tax: "tax", registry: "registry", web: "web/domain", contact: "contact", notice: "notices" };
+const DOMAIN_LABEL: Record<string, string> = { tax: "tax", registry: "registry", web: "web/domain", contact: "contact", notice: "notices", court: "courts" };
 
 async function runCheck(input: Record<string, string>): Promise<Fixture> {
   const subject: Subject = {
@@ -165,7 +209,7 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
       tier_map: eng.tier_map,
       band_blur: eng.band_blur,
       narrative: buildNarrative(eng.signals, coverage.verified, sourcesText),
-      missing: [{ gap: "Registry/court/tax not checked live", cta: "Manual check recommended", mock: false }],
+      missing: [{ gap: "Enforcement, procurement, auction and pledge not checked live", cta: "Manual check recommended", mock: false }],
     },
   };
   return fixture;
