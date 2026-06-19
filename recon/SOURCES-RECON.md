@@ -13,6 +13,33 @@ are live). Status legend: ☐ to do · ⚠ known constraint · 🔎 capture duri
 
 ---
 
+## Geo/bot probe — from the production IP (2026-06-19)
+
+Probed from the DigitalOcean Frankfurt droplet (159.65.120.201) with a browser User-Agent.
+**Headline: no country geo-block. No anti-bot wall on the government sources.** A Frankfurt
+datacenter IP reaches them fine — the "foreign IP" worry does not apply to gov sources.
+
+| Source | From Frankfurt | Note |
+|---|---|---|
+| e-register.am (registry) | ✅ 200, nginx | `/en/companies` → 302; real search path needs recon |
+| src.am (tax) | ✅ 200, Apache | reachable |
+| datalex.am (court) | ✅ 200, nginx | even `?app=AppCaseSearch` → 200, no challenge — the hard one is open |
+| **harkadir.am → cesa.am** (enforcement) | ✅ 302 → cesa.am | **enforcement moved to cesa.am** — retarget the adapter; harkadir cert is self-signed |
+| azdarar.am (notices) | ✅ 200, nginx | reachable |
+| armeps.am (procurement) | ✅ 200, Tomcat | reachable |
+| gnumner.am (procurement) | ✅ 200 (with `-k`) | **expired TLS cert** — disable cert check for this host |
+| ajurd.am (auctions) | ✅ 200, Apache | reachable |
+| spyur.am (directory) | ⚠️ 403 Cloudflare "Just a moment" | behind CF bot-challenge → use the search-engine fallback (`"<phone>" site:spyur.am`) or headless; anticipated |
+| e-services.moj.am | 200 but empty/Access-denied | not needed — e-register.am is the registry surface |
+
+**Implications for the build:** gov scrapers can run from the droplet over plain HTTP — no
+residential proxy needed for government data (only spyur.am, a commercial directory, is
+CF-walled, and the spec already routes around it). Two hosts need bad-TLS handling
+(`rejectUnauthorized: false`): cesa.am/harkadir (self-signed) and gnumner (expired). Update the
+enforcement target from harkadir.am to **cesa.am**.
+
+---
+
 ## e-register.am — State Register (registry, graph) · Epics B1, D3, E1
 Facts: F-REG-01..08, seeds F-GRA-01/02. **Backbone of identity.**
 - 🔎 Canonical search platform: `e-register.am` vs the newer `e-services.moj.am` (sole-proprietor
