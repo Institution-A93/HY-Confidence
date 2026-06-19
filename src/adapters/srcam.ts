@@ -6,14 +6,7 @@ import { request } from "node:https";
 import type { AdapterResult, SourceAdapter, Subject } from "../lib/adapter";
 import { makeFact } from "../lib/adapter";
 import type { Candidate } from "../types";
-import {
-  hasArmenian,
-  toLatinTokens,
-  latinToArmenian,
-  latinToArmenianVariants,
-  translitHyToLatin,
-  nameSimilarity,
-} from "../lib/normalize";
+import { hasArmenian, toLatinTokens, latinToArmenian, translitHyToLatin, nameSimilarity } from "../lib/normalize";
 
 const HOST = "src.am";
 const PAGE = "/en/taxpayerSearchSystemPage/112";
@@ -61,11 +54,11 @@ async function getSession(): Promise<Session> {
   return { csrf, cookie };
 }
 
-async function searchByForm(s: Session, form: string): Promise<Rec[]> {
-  const resp = await httpsReq(
+function postSearch(s: Session, form: string, page = 1): Promise<{ data?: Rec[]; last_page?: number }> {
+  return httpsReq(
     {
       host: HOST,
-      path: SEARCH,
+      path: `${SEARCH}?page=${page}`,
       method: "POST",
       headers: {
         "User-Agent": UA,
@@ -77,8 +70,26 @@ async function searchByForm(s: Session, form: string): Promise<Rec[]> {
       },
     },
     form,
-  );
-  return (JSON.parse(resp.body) as { data?: Rec[] }).data || [];
+  ).then((resp) => JSON.parse(resp.body) as { data?: Rec[]; last_page?: number });
+}
+
+async function searchByForm(s: Session, form: string): Promise<Rec[]> {
+  return (await postSearch(s, form, 1)).data || [];
+}
+
+// Paginate a name query. A common prefix like «գրանդ» returns ~180 records across pages, and
+// the target may sit several pages deep — so we walk pages (capped) and rank afterwards,
+// rather than trying to GENERATE the exact Armenian spelling (which is unreliable).
+async function searchPaged(s: Session, name: string, maxPages = 12): Promise<Rec[]> {
+  const recs: Rec[] = [];
+  const form = `name=${encodeURIComponent(name)}`;
+  for (let p = 1; p <= maxPages; p++) {
+    const json = await postSearch(s, `${form}&page=${p}`, p);
+    const data = json.data || [];
+    recs.push(...data);
+    if (data.length === 0 || (json.last_page && p >= json.last_page)) break;
+  }
+  return recs;
 }
 
 // Resolver: name in any script → ranked candidate companies. Fuzzy happens ONCE here; the
@@ -88,26 +99,22 @@ export async function resolveBySrc(name: string, max = 8): Promise<Candidate[]> 
   const q = (name || "").trim();
   if (!q) return [];
 
-  // build a small set of Armenian-script query strings
-  const queries = new Set<string>();
-  if (hasArmenian(q)) {
-    queries.add(q);
-  } else {
-    queries.add(latinToArmenian(q)); // whole-name single guess
-    // per-token variants: a single token query (e.g. «քենդի») is specific enough to surface
-    // the entity, where a broad first-token query (e.g. «գրանդ») buries it on later pages.
-    for (const tok of toLatinTokens(q)) for (const v of latinToArmenianVariants(tok, 10)) queries.add(v);
-  }
-  const queryList = Array.from(queries).slice(0, 14);
+  // Query the best single transliteration of the whole name and of each token, paginating
+  // each, then rank the union. Fuzzy precision comes from ranking (reliable HY→Latin), not
+  // from guessing the exact Armenian spelling.
+  const queryStrings = hasArmenian(q)
+    ? [q]
+    : Array.from(new Set([latinToArmenian(q), ...toLatinTokens(q).map((t) => latinToArmenian(t))].filter(Boolean)));
 
   const session = await getSession();
   const byTin = new Map<string, Rec>();
-  for (const form of queryList.map((x) => `name=${encodeURIComponent(x)}`)) {
+  for (const qs of queryStrings.slice(0, 3)) {
     try {
-      for (const rec of await searchByForm(session, form)) byTin.set(rec.tin, rec);
+      for (const rec of await searchPaged(session, qs, 12)) byTin.set(rec.tin, rec);
     } catch {
       /* skip a failed sub-query */
     }
+    if (byTin.size > 600) break;
   }
 
   return Array.from(byTin.values())
