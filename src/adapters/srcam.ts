@@ -80,14 +80,22 @@ async function searchByForm(s: Session, form: string): Promise<Rec[]> {
 // Paginate a name query. A common prefix like «գրանդ» returns ~180 records across pages, and
 // the target may sit several pages deep — so we walk pages (capped) and rank afterwards,
 // rather than trying to GENERATE the exact Armenian spelling (which is unreliable).
+// src.am is slow (~8s per search POST), so pages 2..N are fetched in PARALLEL — otherwise a
+// 12-page walk would take ~90s. Page 1 first (to learn last_page), then the rest at once.
 async function searchPaged(s: Session, name: string, maxPages = 12): Promise<Rec[]> {
-  const recs: Rec[] = [];
   const form = `name=${encodeURIComponent(name)}`;
-  for (let p = 1; p <= maxPages; p++) {
-    const json = await postSearch(s, `${form}&page=${p}`, p);
-    const data = json.data || [];
-    recs.push(...data);
-    if (data.length === 0 || (json.last_page && p >= json.last_page)) break;
+  const first = await postSearch(s, `${form}&page=1`, 1);
+  const recs: Rec[] = [...(first.data || [])];
+  const last = Math.min(first.last_page || 1, maxPages);
+  if (last > 1) {
+    const rest = await Promise.all(
+      Array.from({ length: last - 1 }, (_, k) =>
+        postSearch(s, `${form}&page=${k + 2}`, k + 2)
+          .then((r) => r.data || [])
+          .catch(() => [] as Rec[]),
+      ),
+    );
+    for (const d of rest) recs.push(...d);
   }
   return recs;
 }
@@ -95,9 +103,14 @@ async function searchPaged(s: Session, name: string, maxPages = 12): Promise<Rec
 // Resolver: name in any script → ranked candidate companies. Fuzzy happens ONCE here; the
 // query branches ambiguous Latin letters to surface the entity from src.am's substring
 // search, then candidates are re-ranked by Latin-space similarity (HY→Latin is reliable).
+const resolveCache = new Map<string, { at: number; result: Candidate[] }>();
+
 export async function resolveBySrc(name: string, max = 8): Promise<Candidate[]> {
   const q = (name || "").trim();
   if (!q) return [];
+  const key = q.toLowerCase();
+  const cached = resolveCache.get(key);
+  if (cached && Date.now() - cached.at < 30 * 60 * 1000) return cached.result;
 
   // Query the best single transliteration of the whole name and of each token, paginating
   // each, then rank the union. Fuzzy precision comes from ranking (reliable HY→Latin), not
@@ -108,16 +121,16 @@ export async function resolveBySrc(name: string, max = 8): Promise<Candidate[]> 
 
   const session = await getSession();
   const byTin = new Map<string, Rec>();
-  for (const qs of queryStrings.slice(0, 3)) {
+  for (const qs of queryStrings.slice(0, 2)) {
     try {
       for (const rec of await searchPaged(session, qs, 12)) byTin.set(rec.tin, rec);
     } catch {
       /* skip a failed sub-query */
     }
-    if (byTin.size > 600) break;
+    if (byTin.size > 400) break;
   }
 
-  return Array.from(byTin.values())
+  const result = Array.from(byTin.values())
     .map((rec) => ({ rec, score: nameSimilarity(q, rec.name) }))
     .sort((a, b) => b.score - a.score)
     .slice(0, max)
@@ -129,6 +142,8 @@ export async function resolveBySrc(name: string, max = 8): Promise<Candidate[]> 
       registration_date: rec.submitDate,
       address: rec.address,
     }));
+  resolveCache.set(key, { at: Date.now(), result });
+  return result;
 }
 
 function factsFromRecord(rec: Rec, now: string, match: "exact" | "fuzzy") {
