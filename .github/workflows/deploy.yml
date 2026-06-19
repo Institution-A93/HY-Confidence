@@ -1,7 +1,8 @@
 # Build the Vite app and deploy it to GitHub Pages on every push to main.
 # This is what makes "main = production": a merge to main publishes the live site.
-# ONE-TIME SETUP: repo Settings → Pages → Source → "GitHub Actions" (else this builds but
-# does not publish). vite.config base is "./" so assets resolve under the project subpath.
+# Pages is enabled automatically by the configure-pages step (enablement: true). If org
+# policy blocks token-based enablement, flip it once: Settings → Pages → Source → "GitHub
+# Actions". vite.config base is "./" so assets resolve under the project subpath.
 name: Deploy to GitHub Pages
 
 on:
@@ -32,6 +33,8 @@ jobs:
       - run: npm test
       - run: npm run build
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true # turn Pages on via the workflow token — no manual Settings toggle
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
