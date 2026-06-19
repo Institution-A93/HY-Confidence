@@ -106,6 +106,66 @@ export function nameVariants(name: string, maxVariants = 16): Set<string> {
   return new Set(forms.map((f) => f.toLowerCase().replace(/[^a-z0-9]+/g, "")).filter(Boolean));
 }
 
+// Best-effort Latin/Cyrillic → Armenian, so a name typed in Latin can be queried against
+// Armenian-indexed sources (src.am etc.). LOW RECALL by nature — transliteration is lossy
+// and conventional spellings diverge (e.g. "Candy" is registered «Քենդի», not «Քանդի»). TIN
+// stays the reliable identifier; this only widens name-search reach.
+const LAT_DIGRAPHS: [string, string][] = [
+  ["gh", "ղ"], ["ch", "չ"], ["sh", "շ"], ["ts", "ց"], ["dz", "ձ"], ["zh", "ժ"],
+  ["kh", "խ"], ["ph", "փ"], ["th", "թ"], ["yu", "յու"], ["ya", "յա"],
+];
+const LAT_SINGLE: Record<string, string> = {
+  a: "ա", b: "բ", c: "կ", d: "դ", e: "ե", f: "ֆ", g: "գ", h: "հ", i: "ի", j: "ջ",
+  k: "կ", l: "լ", m: "մ", n: "ն", o: "ո", p: "պ", q: "ք", r: "ր", s: "ս", t: "տ",
+  u: "ու", v: "վ", w: "վ", x: "խ", y: "յ", z: "զ",
+};
+// Pragmatic Cyrillic → Latin first (then reuse the Latin map), for RU input.
+const CYR_TO_LAT: Record<string, string> = {
+  а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "yo", ж: "zh", з: "z", и: "i",
+  й: "y", к: "k", л: "l", м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t",
+  у: "u", ф: "f", х: "kh", ц: "ts", ч: "ch", ш: "sh", щ: "sh", ы: "i", э: "e",
+  ю: "yu", я: "ya", ь: "", ъ: "",
+};
+
+function cyrToLat(s: string): string {
+  let out = "";
+  for (const ch of s) out += CYR_TO_LAT[ch.toLowerCase()] ?? ch;
+  return out;
+}
+
+export function latinToArmenian(input: string): string {
+  let s = cyrToLat(input).toLowerCase();
+  let out = "";
+  let i = 0;
+  while (i < s.length) {
+    const two = s.slice(i, i + 2);
+    const dg = LAT_DIGRAPHS.find(([l]) => l === two);
+    if (dg) {
+      out += dg[1];
+      i += 2;
+      continue;
+    }
+    const ch = s[i];
+    out += LAT_SINGLE[ch] ?? ch;
+    i++;
+  }
+  return out;
+}
+
+const ARMENIAN_RE = /[԰-֏]/;
+export function hasArmenian(s: string): boolean {
+  return ARMENIAN_RE.test(s);
+}
+
+// Query candidates in Armenian script for a name in any script. Armenian input passes
+// through unchanged; Latin/Cyrillic input is transliterated (best-effort).
+export function armenianQueryCandidates(name: string): string[] {
+  const n = (name || "").trim();
+  if (!n) return [];
+  if (hasArmenian(n)) return [n];
+  return [latinToArmenian(n)];
+}
+
 // Token-overlap similarity in [0,1] between two names across scripts.
 export function sameEntityScore(a: string, b: string): number {
   const ta = new Set(toLatinTokens(a));

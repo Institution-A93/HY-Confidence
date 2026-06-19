@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { translitHyToLatin, stripLegal, toLatinKey, nameVariants, sameEntity } from "./normalize";
+import {
+  translitHyToLatin,
+  stripLegal,
+  toLatinKey,
+  nameVariants,
+  sameEntity,
+  latinToArmenian,
+  armenianQueryCandidates,
+  hasArmenian,
+} from "./normalize";
 
 describe("HY→Latin transliteration (clean cases)", () => {
   it("maps the fixture entity roots", () => {
@@ -25,6 +34,20 @@ describe("variant generation handles romanization ambiguity", () => {
     const v = nameVariants("Արաքս");
     expect(v.has("araqs")).toBe(true);
     expect(v.has("araks")).toBe(true); // the form the English name actually used
+  });
+});
+
+describe("Latin/Cyrillic → Armenian (best-effort query candidates)", () => {
+  it("transliterates clean Latin roots to Armenian", () => {
+    expect(latinToArmenian("grand")).toBe("գրանդ");
+    expect(latinToArmenian("spyur")).toBe("սպյուր");
+  });
+  it("passes Armenian input through unchanged", () => {
+    expect(hasArmenian("Սպյուր")).toBe(true);
+    expect(armenianQueryCandidates("Սպյուր")).toEqual(["Սպյուր"]);
+  });
+  it("produces an Armenian candidate for Latin input", () => {
+    expect(armenianQueryCandidates("Grand")).toEqual(["գրանդ"]);
   });
 });
 

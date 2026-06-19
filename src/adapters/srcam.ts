@@ -7,6 +7,7 @@
 import { request } from "node:https";
 import type { AdapterResult, SourceAdapter, Subject } from "../lib/adapter";
 import { makeFact } from "../lib/adapter";
+import { armenianQueryCandidates } from "../lib/normalize";
 
 const HOST = "src.am";
 const PAGE = "/en/taxpayerSearchSystemPage/112";
@@ -57,26 +58,30 @@ export const srcAdapter: SourceAdapter = {
       const cookie = cookieHeader(page.headers["set-cookie"]);
       if (!csrf || !cookie) throw new Error("could not obtain CSRF/session");
 
-      // 2. POST the search (by TIN if given, else by name)
-      const form = subject.tin ? `tin=${encodeURIComponent(subject.tin)}` : `name=${encodeURIComponent(query)}`;
-      const resp = await httpsReq(
-        {
-          host: HOST,
-          path: SEARCH,
-          method: "POST",
-          headers: {
-            "User-Agent": UA,
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Content-Length": Buffer.byteLength(form),
-            "X-CSRF-TOKEN": csrf,
-            "X-Requested-With": "XMLHttpRequest",
-            Cookie: cookie,
-          },
-        },
-        form,
-      );
-      const json = JSON.parse(resp.body) as { data?: Rec[] };
-      const data = json.data || [];
+      // 2. POST the search. By TIN if given (script-agnostic); else try Armenian-script
+      // candidates, transliterating Latin/Cyrillic input (best effort — TIN is reliable).
+      const baseHeaders = {
+        "User-Agent": UA,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-CSRF-TOKEN": csrf,
+        "X-Requested-With": "XMLHttpRequest",
+        Cookie: cookie,
+      };
+      const searchOne = async (form: string): Promise<Rec[]> => {
+        const resp = await httpsReq(
+          { host: HOST, path: SEARCH, method: "POST", headers: { ...baseHeaders, "Content-Length": Buffer.byteLength(form) } },
+          form,
+        );
+        return (JSON.parse(resp.body) as { data?: Rec[] }).data || [];
+      };
+      const queries = subject.tin
+        ? [`tin=${encodeURIComponent(subject.tin)}`]
+        : armenianQueryCandidates(query).map((c) => `name=${encodeURIComponent(c)}`);
+      let data: Rec[] = [];
+      for (const q of queries) {
+        data = await searchOne(q);
+        if (data.length) break;
+      }
       if (data.length === 0) {
         // queried successfully, nothing matched — a finding, not a failure
         const f = makeFact({ catalog_id: "F-TAX-01", subject: query, domain: "tax", field: "tin_name_match", value: "no taxpayer found", source: this.source, url: `https://src.am${PAGE}`, fetched_at: now });
