@@ -101,23 +101,29 @@ function deriveSignals(facts: Fact[]): Signal[] {
   const yearIn = (v: string) => Number((v.match(/most recent (\d{4})/) || [])[1]) || null;
 
   const def = f("F-CRT-02");
+  const pla = f("F-CRT-01");
+  const defCount = def ? Number((def.value.match(/Defendant in (\d+)/) || [])[1] || 0) : 0;
+  const plaCount = pla ? Number((pla.value.match(/Plaintiff in (\d+)/) || [])[1] || 0) : 0;
+
+  if (pla) {
+    out.push(mkSignal("WP-09", "weak", "+", [pla.fact_id], `Plaintiff in ${plaCount} collection case(s)${defCount ? ` (vs ${defCount} as defendant)` : ""} — actively enforces its own receivables.`));
+  }
   if (def) {
-    const count = Number((def.value.match(/Defendant in (\d+)/) || [])[1] || 0);
     const yr = yearIn(def.value);
     const d = decay(yr);
-    if (d > 0) {
-      // SN-01 −10…−15: lean to −15 with several active suits, else −12; then recency-decayed.
-      const base = (count >= 3 ? -15 : -12) * d;
-      out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `Defendant in ${count} civil case(s)${yr ? ` (most recent ${yr})` : ""} — active litigation exposure.`, base));
-    } else if (count === 1) {
+    // SN-01 should reflect debt/contract cases where the entity is the TARGET. Case TYPE and
+    // AMOUNT live behind the detail captcha, so v1 uses the NET defendant excess as the proxy: a
+    // company that sues at least as often as it is sued is enforcing its receivables (spec R-04's
+    // stated philosophy — "suing deadbeat customers is healthy"), and its raw defendant count just
+    // tracks its size. Only a NET litigation target trips SN-01; magnitude + R-06 recency scale it.
+    // [follow-up: filter to debt/contract + scale by amount once the detail captcha is solved.]
+    const net = defCount - plaCount;
+    if (net >= 1 && d > 0) {
+      const base = (net >= 10 ? -15 : net >= 3 ? -12 : -10) * d;
+      out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `Net litigation target: ${defCount} case(s) as defendant vs ${plaCount} as plaintiff${yr ? `, most recent ${yr}` : ""}.`, base));
+    } else if (net >= 1 && defCount === 1) {
       out.push(mkSignal("WN-07", "weak", "-", [def.fact_id], "A single, dated defendant case (>24 months old)."));
     }
-  }
-
-  const pla = f("F-CRT-01");
-  if (pla) {
-    const count = Number((pla.value.match(/Plaintiff in (\d+)/) || [])[1] || 0);
-    out.push(mkSignal("WP-09", "weak", "+", [pla.fact_id], `Plaintiff in ${count} collection case(s) — actively enforces its own receivables.`));
   }
 
   const bkr = f("F-CRT-03");
