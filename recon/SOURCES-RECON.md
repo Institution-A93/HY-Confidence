@@ -62,6 +62,25 @@ The landing-page 200s were misleading; the real content paths have protection:
 solver like 2captcha for src.am-style image codes and cesa reCAPTCHA, and/or an Armenian residential
 proxy for Radware). That is a deliberate cost/infra step — not plain HTTP.
 
+### The "open" sources — captcha-free but no quick win (recon 2026-06-19)
+
+All three are reachable with no captcha/Cloudflare, but none exposes a clean simple search; each
+needs a dedicated build (a src.am-style grind), not a one-shot scrape:
+
+- **gnumner.minfin.am (procurement, F-PRC-01).** `POST /hy/search/` with `search=` returns a generic
+  yearly-stats page, NOT supplier-specific contracts — supplier search is not exposed (matches the
+  spec caveat). The real route is iterating award announcements / the armeps e-procurement surface
+  into a local index. Deferred.
+- **azdarar.am (notices, F-NTC-01).** Canonical host is `azdarar.am` (no www; www 301s). Search form:
+  `GET /hy/public-announcement/search-result/?query=<text>` (+ `date_start/date_end`, `applicant_type[]`).
+  The query is accepted (200) but the result list came back empty for test queries — results are likely
+  AJAX-loaded or need exact entity names. Needs one more recon iteration to find the result feed.
+- **ajurd.am (auctions, F-AUC-01).** Joomla `com_auction`; search form has `search[q]` + a per-session
+  token + `option`/`task`. Not yet attempted — needs the token flow.
+
+Recommendation: grind ONE properly in a focused session — **azdarar** is highest value (liquidation /
+capital-reduction notices feed blocker B-02 and SN-04).
+
 ---
 
 ## e-register.am — State Register (registry, graph) · Epics B1, D3, E1
