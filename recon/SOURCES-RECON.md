@@ -75,11 +75,28 @@ needs a dedicated build (a src.am-style grind), not a one-shot scrape:
   `GET /hy/public-announcement/search-result/?query=<text>` (+ `date_start/date_end`, `applicant_type[]`).
   The query is accepted (200) but the result list came back empty for test queries — results are likely
   AJAX-loaded or need exact entity names. Needs one more recon iteration to find the result feed.
-- **ajurd.am (auctions, F-AUC-01).** Joomla `com_auction`; search form has `search[q]` + a per-session
-  token + `option`/`task`. Not yet attempted — needs the token flow.
+- **ajurd.am (auctions, F-AUC-01) — ⛔ NOT NAME-ATTRIBUTABLE (recon 2026-06-19, building decision: SKIP).**
+  ajurd.am IS the correct source — the official DAHK compulsory-auction site ("ՀԱՐԿԱԴԻՐ ԷԼԵԿՏՐՈՆԱՅԻՆ
+  ԱՃՈՒՐԴՆԵՐԻ ՊԱՇՏՈՆԱԿԱՆ ԿԱՅՔ", MoJ Compulsory Enforcement Service). Search mechanics are fully worked
+  out and unguarded: GET `/hy/` yields a Joomla session cookie + a per-session token `<32hex>=1`; POST
+  to `/hy/` with `option=com_auction&task=auction.startSearch&search[q]=<text>&search[lot_id]=&search[cat]=&<token>=1`
+  filters server-side (the bare GET `/hy/search?q=` is cosmetic — it ignores `q` and shows the default
+  ~50 lots). Lots link to `/lot-item?i=<id>`. **The blocker is the DATA MODEL, not anti-bot:** lots
+  publish only the ASSET (category, address, area, starting price, auction dates, and the handling
+  enforcement division `Վարույթն իրականացնող`) — **never the debtor's name or TIN.** Proof: `search[q]=ՍՊԸ`
+  (the legal-form suffix in almost every company name) returns **0 lots**; 5 sampled lot pages across
+  categories show no `Պարտապան`/legal-form/TIN. So you cannot ask "is THIS counterparty's asset on
+  auction?" by name. The only lot→debtor join lives in the enforcement proceeding (cesa.am/DAHK), which
+  is Cloudflare+reCAPTCHA-walled. **Therefore SN-05 is unlocked together with cesa.am** (same paid
+  headless+captcha step as e-register) — not before. Building a name-keyed ajurd adapter now would return
+  empty for every real query and mislabel it "auction: queried, none found" (verified_empty), violating
+  the R-09 "could-not-query ≠ queried-empty" invariant — so it was deliberately NOT built.
+  (`eauction.am` is unrelated — it's "LOT BORSA", a private commodity exchange; voluntary, also no debtor names.)
 
 Recommendation: grind ONE properly in a focused session — **azdarar** is highest value (liquidation /
-capital-reduction notices feed blocker B-02 and SN-04).
+capital-reduction notices feed blocker B-02 and SN-04). **azdarar is now BUILT & LIVE** (`src/adapters/azdarar.ts`).
+Next buildable high-value source is **datalex** (courts — names plaintiff/defendant, so unlike ajurd it
+IS name-attributable). See the datalex section below.
 
 ---
 
