@@ -59,8 +59,11 @@ export class CircuitBreaker {
   }
 }
 
+// Key must reflect EVERY subject field an adapter might query — keying on name alone let two
+// different people at the same company collide (sanctions screens `person`, not `name`).
 function keyFor(adapter: SourceAdapter, subject: Subject): string {
-  return `${adapter.domain}:${subject.tin || subject.name || subject.phone || subject.email || ""}`;
+  const s = subject;
+  return `${adapter.domain}:${s.tin || ""}|${s.name || ""}|${s.person || ""}|${s.website || ""}|${s.email || ""}|${s.phone || ""}`;
 }
 
 export interface ResilienceOpts {
