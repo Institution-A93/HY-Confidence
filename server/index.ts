@@ -10,8 +10,9 @@ import { createServer } from "node:http";
 import { sanctionsAdapter } from "../src/adapters/sanctions";
 import { whoisAdapter } from "../src/adapters/whois";
 import { mxAdapter } from "../src/adapters/mx";
+import { srcAdapter } from "../src/adapters/srcam";
 import { resilientFetch, TtlCache, CircuitBreaker } from "../src/lib/fetcher";
-import { coverageFrom } from "../src/lib/adapter";
+import { COVERAGE_DOMAINS } from "../src/lib/adapter";
 import type { AdapterResult, Subject } from "../src/lib/adapter";
 import { computeVerdict } from "../src/scoring/engine";
 import { baseWeightFor } from "../src/scoring/weights";
@@ -21,7 +22,7 @@ const PORT = Number(process.env.PORT || 8080);
 const cache = new TtlCache<AdapterResult>(6 * 60 * 60 * 1000); // 6h
 const breaker = new CircuitBreaker();
 
-const ADAPTERS = [sanctionsAdapter, whoisAdapter, mxAdapter];
+const ADAPTERS = [srcAdapter, sanctionsAdapter, whoisAdapter, mxAdapter];
 
 function mkSignal(id: string, grade: Signal["grade"], polarity: Signal["polarity"], evidence: string[], note: string): Signal {
   const w = grade === "blocker" ? null : baseWeightFor(id);
@@ -53,6 +54,22 @@ function deriveSignals(facts: Fact[]): Signal[] {
     if (/matches website domain/i.test(con.value)) out.push(mkSignal("WP-03", "weak", "+", [con.fact_id], "Email domain matches the website."));
     else if (/generic provider/i.test(con.value)) out.push(mkSignal("WN-02", "weak", "-", [con.fact_id], "Generic email provider as the primary B2B contact."));
   }
+
+  // Registry facts (from the SRC taxpayer record): status + entity age.
+  const status = f("F-REG-01");
+  if (status && /լուծար|սնանկ/.test(status.value)) {
+    out.push(mkSignal("B-02", "blocker", "-", [status.fact_id], "Registry status indicates liquidation or bankruptcy."));
+  }
+  const reg = f("F-REG-02");
+  if (reg) {
+    const yr = Number((reg.value.match(/(\d{4})/) || [])[1]);
+    if (yr) {
+      const age = new Date().getFullYear() - yr;
+      const active = !!status && /Գործող/.test(status.value);
+      if (age < 1) out.push(mkSignal("SN-07", "strong", "-", [reg.fact_id], "Entity is under a year old."));
+      else if (age >= 7 && active) out.push(mkSignal("SP-01", "strong", "+", [reg.fact_id], `Registered ${age} years ago and still active — an established operator.`));
+    }
+  }
   return out;
 }
 
@@ -79,8 +96,11 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
 
   const results = await Promise.all(ADAPTERS.map((a) => resilientFetch(a, subject, { cache, breaker })));
   const facts = results.flatMap((r) => r.facts);
-  const cov = coverageFrom(results);
-  const coverage = { verified: cov.verified, total: 10 }; // 10-domain model; only 3 queried
+  // Coverage is fact-driven: one adapter (src.am) yields facts in several coverage domains,
+  // so count the distinct 10-model domains actually present in the returned facts.
+  const present = new Set<string>();
+  for (const fct of facts) if ((COVERAGE_DOMAINS as string[]).includes(fct.domain)) present.add(fct.domain);
+  const coverage = { verified: present.size, total: 10 };
 
   const signals = deriveSignals(facts);
   const eng = computeVerdict({ signals, facts, coverage, fuzzyResolution: false });
