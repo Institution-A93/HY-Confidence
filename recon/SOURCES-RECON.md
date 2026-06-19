@@ -38,6 +38,30 @@ CF-walled, and the spec already routes around it). Two hosts need bad-TLS handli
 (`rejectUnauthorized: false`): cesa.am/harkadir (self-signed) and gnumner (expired). Update the
 enforcement target from harkadir.am to **cesa.am**.
 
+### Deep recon — anti-automation per source (2026-06-19)
+
+The landing-page 200s were misleading; the real content paths have protection:
+
+- **src.am — ✅ BUILT & LIVE.** Laravel app. `POST /en/taxpayerSearchData` with a CSRF token
+  (`<meta name="csrf-token">`) + the session cookie returns the **real taxpayer record as JSON**:
+  TIN, name, status (`Գործող`=active), registration date, legal form, address, VAT. No captcha
+  blocked us. **This one source covers F-TAX-01/02 AND registry basics F-REG-01/02/03/04** —
+  which is most of what e-register was wanted for. Adapter: `src/adapters/srcam.ts`. Verified
+  live: Grand Candy → TIN 02226764. (`/en/search` and `/en/searchInternalData` are decoys —
+  site-wide search and customs data; `taxpayerSearchData` is the taxpayer one.)
+- **e-register.am — ⛔ BLOCKED.** Behind **Radware Bot Manager**: real content paths 302-redirect
+  a datacenter IP to `validate.perfdrive.com` (our IP is base64'd into the challenge URL). Needs a
+  headless browser that solves the JS challenge, or a residential proxy. Not buildable as plain HTTP.
+  Mitigated for now by src.am covering the registry basics; founders/UBO/history still need this
+  (or the paid extract).
+- **cesa.am — ⛔ BLOCKED (likely).** Cloudflare + CodeIgniter; CSP references **reCAPTCHA**, so the
+  proceedings search is probably captcha-gated. Needs a captcha-solving service or headless. Content
+  is reachable at `/en/` but the search itself is the wall.
+
+**To unblock e-register + cesa.am later:** a Playwright headless pool on the droplet (+ a captcha
+solver like 2captcha for src.am-style image codes and cesa reCAPTCHA, and/or an Armenian residential
+proxy for Radware). That is a deliberate cost/infra step — not plain HTTP.
+
 ---
 
 ## e-register.am — State Register (registry, graph) · Epics B1, D3, E1
