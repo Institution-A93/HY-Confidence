@@ -80,11 +80,12 @@ export const azdararAdapter: SourceAdapter = {
     if (!name) return { domain: "notice", status: "verified_empty", facts: [], fetched_at: now, source: this.source };
     try {
       const html = await httpsGet(`${SEARCH}?query=${encodeURIComponent(name)}`);
-      const notices = parseNotices(html);
+      // F-NTC-01 is about distress notices (liquidation/bankruptcy/capital/creditor/reorg);
+      // unrelated "other" notices (e.g. court summonses) are not scored → queried-empty.
+      const notices = parseNotices(html).filter((n) => n.type !== "other");
       if (notices.length === 0) {
         return { domain: "notice", status: "verified_empty", facts: [], fetched_at: now, source: this.source };
       }
-      // surface the most severe notice as the F-NTC-01 fact
       notices.sort((a, b) => SEVERITY.indexOf(a.type) - SEVERITY.indexOf(b.type));
       const top = notices[0];
       const value = `${LABEL[top.type]}${top.date ? ` (${top.date})` : ""}: ${top.title.slice(0, 140)}`;
