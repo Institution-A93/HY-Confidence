@@ -17,7 +17,7 @@ export function InputScreen({
   live: boolean;
 }) {
   const t = useT();
-  const blank: CheckInput = { entity_name: "", tin: "", person_first_name: "", phone: "" };
+  const blank: CheckInput = { entity_name: "", tin: "", person_first_name: "", phone: "", website: "", email: "" };
   const [v, setV] = useState<CheckInput>(initial || blank);
   useEffect(() => {
     setV(initial || blank);
@@ -25,8 +25,8 @@ export function InputScreen({
   }, [initial]);
   const set = (k: keyof CheckInput) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setV((s) => ({ ...s, [k]: e.target.value }));
-  const canSubmit = (["entity_name", "tin", "person_first_name", "phone"] as (keyof CheckInput)[]).some((k) =>
-    (v[k] || "").toString().trim(),
+  const canSubmit = (["entity_name", "tin", "person_first_name", "phone", "website", "email"] as (keyof CheckInput)[]).some(
+    (k) => (v[k] || "").toString().trim(),
   );
   const submit = () => {
     if (canSubmit) onSubmit(v);
@@ -81,6 +81,19 @@ export function InputScreen({
           <label>{t("s1_phone")}</label>
           <input value={v.phone ?? ""} onChange={set("phone")} onKeyDown={onKey} placeholder={t("s1_phone_ph")} />
         </div>
+
+        {live && (
+          <>
+            <div className="field">
+              <label>{t("s1_website")}</label>
+              <input value={v.website ?? ""} onChange={set("website")} onKeyDown={onKey} placeholder={t("s1_website_ph")} />
+            </div>
+            <div className="field">
+              <label>{t("s1_email")}</label>
+              <input value={v.email ?? ""} onChange={set("email")} onKeyDown={onKey} placeholder={t("s1_email_ph")} />
+            </div>
+          </>
+        )}
 
         <div className="input-foot">
           <p className="micro">{t("s1_micro")}</p>

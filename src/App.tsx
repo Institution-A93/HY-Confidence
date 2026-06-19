@@ -6,10 +6,11 @@ import { LangContext, useT, LANGS, translate } from "./i18n";
 import type { LangCode } from "./i18n";
 import { FIXTURES } from "./fixtures";
 import { factById } from "./components";
+import { BACKEND_URL } from "./config";
 import { InputScreen, ResolveScreen, CheckingScreen, VerdictScreen } from "./screens";
 import type { CheckInput, Fixture, MissingItem, SpawnOffer } from "./types";
 
-type Screen = "INPUT" | "RESOLVE" | "CHECKING" | "VERDICT";
+type Screen = "INPUT" | "RESOLVE" | "CHECKING" | "VERDICT" | "LIVELOAD";
 type Tab = { key: string; kind: "verdict"; fixture: Fixture } | { key: string; kind: "stub"; target: SpawnOffer };
 
 /* match free input to a fixture (demo: by entity name or TIN) */
@@ -378,6 +379,7 @@ export default function App() {
   const [prefill, setPrefill] = useState<CheckInput | null>(null);
   const [modal, setModal] = useState<string | null>(null);
   const [liveMode, setLiveMode] = useState(false);
+  const [liveError, setLiveError] = useState<string | null>(null);
 
   function startCheck(fixture: Fixture) {
     setRun(fixture);
@@ -385,6 +387,10 @@ export default function App() {
     setScreen(fixture.resolution.ambiguous ? "RESOLVE" : "CHECKING");
   }
   function onSubmit(input: CheckInput) {
+    if (liveMode) {
+      runLiveCheck(input);
+      return;
+    }
     const fx = matchFixture(input);
     if (fx) {
       startCheck(fx);
@@ -392,6 +398,28 @@ export default function App() {
       setRun(makeNoMatch(input));
       setActiveKey(null);
       setScreen("RESOLVE");
+    }
+  }
+
+  // Live mode: POST the input to the backend, which runs the real adapters and returns a
+  // Fixture-shaped result we render exactly like a demo vignette.
+  async function runLiveCheck(input: CheckInput) {
+    setLiveError(null);
+    setActiveKey(null);
+    setRun(null);
+    setScreen("LIVELOAD");
+    try {
+      const res = await fetch(BACKEND_URL + "/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (!res.ok) throw new Error("backend " + res.status);
+      const fixture = (await res.json()) as Fixture;
+      openVerdict(fixture);
+    } catch {
+      setLiveError(t("live_error"));
+      setScreen("INPUT");
     }
   }
   function onPrefill(fx: Fixture) {
@@ -498,7 +526,8 @@ export default function App() {
 
   const activeTab = tabs.find((x) => x.key === activeKey);
   const showStub = screen === "VERDICT" && activeTab && activeTab.kind === "stub";
-  const isCentered = (screen === "INPUT" || screen === "RESOLVE" || screen === "CHECKING") && !showStub;
+  const isCentered =
+    (screen === "INPUT" || screen === "RESOLVE" || screen === "CHECKING" || screen === "LIVELOAD") && !showStub;
 
   // keyboard 1–4 load a fixture, 5 = live input (ignored while typing)
   useEffect(() => {
@@ -537,7 +566,27 @@ export default function App() {
         <div className={"stage" + (isCentered ? " center" : "")}>
           {showStub && activeTab.kind === "stub" && <StubVerdict target={activeTab.target} />}
 
-          {!showStub && screen === "INPUT" && <InputScreen initial={prefill} onSubmit={onSubmit} live={liveMode} />}
+          {!showStub && screen === "INPUT" && (
+            <div>
+              {liveError && (
+                <p className="live-note" style={{ color: "var(--red)", marginBottom: 12 }}>
+                  {liveError}
+                </p>
+              )}
+              <InputScreen initial={prefill} onSubmit={onSubmit} live={liveMode} />
+            </div>
+          )}
+          {!showStub && screen === "LIVELOAD" && (
+            <div className="check-wrap" style={{ textAlign: "center" }}>
+              <div className="eyebrow" style={{ marginBottom: 16 }}>
+                {t("s3_eyebrow")}
+              </div>
+              <p className="sub">{t("live_checking")}</p>
+              <div className="cp-bar" style={{ marginTop: 20 }}>
+                <span style={{ width: "60%" }}></span>
+              </div>
+            </div>
+          )}
           {!showStub && screen === "RESOLVE" && run && (
             <ResolveScreen
               fixture={run}

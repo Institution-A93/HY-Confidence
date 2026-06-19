@@ -117,6 +117,8 @@ export interface CheckInput {
   tin: string | null;
   person_first_name: string | null;
   phone: string | null;
+  website?: string | null; // live mode only — feeds WHOIS
+  email?: string | null; // live mode only — feeds MX
 }
 
 export interface Fixture {
