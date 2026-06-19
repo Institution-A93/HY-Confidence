@@ -58,6 +58,9 @@ describe("fuzzy resolver building blocks", () => {
   it("variant set contains the clean transliteration of a token", () => {
     expect(latinToArmenianVariants("grand")).toContain("գրանդ");
   });
+  it("variant set contains the conventional spelling (candy → քենդի)", () => {
+    expect(latinToArmenianVariants("candy")).toContain("քենդի");
+  });
   it("levenshtein basics", () => {
     expect(levenshtein("kitten", "sitting")).toBe(3);
     expect(levenshtein("abc", "abc")).toBe(0);

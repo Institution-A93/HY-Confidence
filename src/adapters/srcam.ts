@@ -94,9 +94,11 @@ export async function resolveBySrc(name: string, max = 8): Promise<Candidate[]> 
     queries.add(q);
   } else {
     queries.add(latinToArmenian(q)); // whole-name single guess
-    for (const tok of toLatinTokens(q)) for (const v of latinToArmenianVariants(tok, 4)) queries.add(v);
+    // per-token variants: a single token query (e.g. «քենդի») is specific enough to surface
+    // the entity, where a broad first-token query (e.g. «գրանդ») buries it on later pages.
+    for (const tok of toLatinTokens(q)) for (const v of latinToArmenianVariants(tok, 10)) queries.add(v);
   }
-  const queryList = Array.from(queries).slice(0, 8);
+  const queryList = Array.from(queries).slice(0, 14);
 
   const session = await getSession();
   const byTin = new Map<string, Rec>();

@@ -171,13 +171,15 @@ const LAT_AMBIG_SINGLE: Record<string, string[]> = {
 
 // Best-effort Armenian-script candidates for a Latin/Cyrillic word, branching the ambiguous
 // letters. Capped to keep it from exploding combinatorially.
-export function latinToArmenianVariants(input: string, max = 8): string[] {
+export function latinToArmenianVariants(input: string, max = 24): string[] {
   const s = cyrToLat(input).toLowerCase();
   let forms: string[] = [""];
   const push = (alts: string[]) => {
     const next: string[] = [];
     for (const f of forms) for (const a of alts) next.push(f + a);
-    forms = next.length > max ? next.slice(0, max) : next;
+    // bound explosion on very long tokens, but do NOT prune mid-word — that would drop
+    // valid branches (e.g. the ք/ե path that spells «քենդի»). Final cap is applied at return.
+    forms = next.length > 256 ? next.slice(0, 256) : next;
   };
   let i = 0;
   while (i < s.length) {
@@ -197,7 +199,7 @@ export function latinToArmenianVariants(input: string, max = 8): string[] {
     push(LAT_AMBIG_SINGLE[ch] ?? [LAT_SINGLE[ch] ?? ch]);
     i++;
   }
-  return Array.from(new Set(forms));
+  return Array.from(new Set(forms)).slice(0, max);
 }
 
 // Levenshtein edit distance — used to rank candidates by comparing the user's Latin input
