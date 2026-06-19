@@ -11,8 +11,10 @@ import { sanctionsAdapter } from "../src/adapters/sanctions";
 import { whoisAdapter } from "../src/adapters/whois";
 import { mxAdapter } from "../src/adapters/mx";
 import { srcAdapter, resolveBySrc } from "../src/adapters/srcam";
+import { azdararAdapter } from "../src/adapters/azdarar";
 import { resilientFetch, TtlCache, CircuitBreaker } from "../src/lib/fetcher";
 import { COVERAGE_DOMAINS } from "../src/lib/adapter";
+import { stripLegal } from "../src/lib/normalize";
 import type { AdapterResult, Subject } from "../src/lib/adapter";
 import { computeVerdict } from "../src/scoring/engine";
 import { baseWeightFor } from "../src/scoring/weights";
@@ -22,7 +24,10 @@ const PORT = Number(process.env.PORT || 8080);
 const cache = new TtlCache<AdapterResult>(6 * 60 * 60 * 1000); // 6h
 const breaker = new CircuitBreaker();
 
-const ADAPTERS = [srcAdapter, sanctionsAdapter, whoisAdapter, mxAdapter];
+// Keyed adapters run with the raw subject (TIN / email / website / person).
+const KEYED_ADAPTERS = [sanctionsAdapter, whoisAdapter, mxAdapter];
+// Name-keyed adapters need the CANONICAL Armenian name, so they run after src.am resolves it.
+const NAME_KEYED_ADAPTERS = [azdararAdapter];
 
 function mkSignal(id: string, grade: Signal["grade"], polarity: Signal["polarity"], evidence: string[], note: string): Signal {
   const w = grade === "blocker" ? null : baseWeightFor(id);
@@ -70,20 +75,34 @@ function deriveSignals(facts: Fact[]): Signal[] {
       else if (age >= 7 && active) out.push(mkSignal("SP-01", "strong", "+", [reg.fact_id], `Registered ${age} years ago and still active — an established operator.`));
     }
   }
+
+  // Public notices (Azdarar): liquidation/bankruptcy veto; capital-reduction / creditor-call hurt.
+  const notice = f("F-NTC-01");
+  if (notice) {
+    if (/Liquidation notice|Bankruptcy notice/.test(notice.value)) {
+      out.push(mkSignal("B-02", "blocker", "-", [notice.fact_id], "Public notice of liquidation or bankruptcy (Azdarar)."));
+    } else if (/Capital-reduction notice/.test(notice.value)) {
+      out.push(mkSignal("SN-04", "strong", "-", [notice.fact_id], "Capital-reduction notice published — equity being pulled out."));
+    } else if (/Creditor-call notice/.test(notice.value)) {
+      out.push(mkSignal("SN-04", "strong", "-", [notice.fact_id], "Creditor-call notice published."));
+    }
+  }
   return out;
 }
 
-function buildNarrative(signals: Signal[], verified: number): NarrativeLine[] {
+function buildNarrative(signals: Signal[], verified: number, sourcesText: string): NarrativeLine[] {
   const lines: NarrativeLine[] = [];
   const blocker = signals.find((s) => s.grade === "blocker");
   if (blocker) lines.push({ text: "BLOCKED: " + blocker.note, evidence: blocker.evidence });
   for (const s of signals.filter((x) => x.grade !== "blocker")) lines.push({ text: s.note, evidence: s.evidence });
   lines.push({
-    text: `Live check covered ${verified} of 10 sources (sanctions, web/domain, contact). The registry, court, enforcement, tax and other domains need the data backend and were not queried — treat this as a partial, low-confidence read.`,
+    text: `Live check covered ${verified} of 10 domains (${sourcesText}). Court, enforcement, procurement, auction and pledge are not wired yet — treat this as a partial, low-confidence read.`,
     evidence: [],
   });
   return lines;
 }
+
+const DOMAIN_LABEL: Record<string, string> = { tax: "tax", registry: "registry", web: "web/domain", contact: "contact", notice: "notices" };
 
 async function runCheck(input: Record<string, string>): Promise<Fixture> {
   const subject: Subject = {
@@ -94,13 +113,31 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
     website: input.website || (input.email ? input.email.split("@")[1] : undefined),
   };
 
-  const results = await Promise.all(ADAPTERS.map((a) => resilientFetch(a, subject, { cache, breaker })));
+  // Phase 1: src.am — identity + registry basics; yields the canonical Armenian name.
+  const srcRes = await resilientFetch(srcAdapter, subject, { cache, breaker });
+  const taxVal = srcRes.facts.find((f) => f.catalog_id === "F-TAX-01")?.value || "";
+  const canonicalName = taxVal.includes(" — TIN") ? stripLegal(taxVal.split(" — TIN")[0]) : subject.name || "";
+  const nameSubject: Subject = { ...subject, name: canonicalName };
+
+  // Phase 2: keyed adapters (raw subject) + name-keyed adapters (canonical name), in parallel.
+  const rest = await Promise.all([
+    ...KEYED_ADAPTERS.map((a) => resilientFetch(a, subject, { cache, breaker })),
+    ...NAME_KEYED_ADAPTERS.map((a) => resilientFetch(a, nameSubject, { cache, breaker })),
+  ]);
+  const results = [srcRes, ...rest];
   const facts = results.flatMap((r) => r.facts);
-  // Coverage is fact-driven: one adapter (src.am) yields facts in several coverage domains,
-  // so count the distinct 10-model domains actually present in the returned facts.
+
+  // Coverage = domains that produced facts OR were queried successfully (queried-empty still
+  // counts as covered; one adapter like src.am spans several coverage domains).
   const present = new Set<string>();
   for (const fct of facts) if ((COVERAGE_DOMAINS as string[]).includes(fct.domain)) present.add(fct.domain);
+  for (const r of results)
+    if ((r.status === "verified" || r.status === "verified_empty") && (COVERAGE_DOMAINS as string[]).includes(r.domain))
+      present.add(r.domain);
   const coverage = { verified: present.size, total: 10 };
+  const sourceLabels = Array.from(present).map((d) => DOMAIN_LABEL[d] || d);
+  if (facts.some((f) => f.domain === "sanctions")) sourceLabels.push("sanctions");
+  const sourcesText = sourceLabels.join(", ") || "none";
 
   const signals = deriveSignals(facts);
   const eng = computeVerdict({ signals, facts, coverage, fuzzyResolution: false });
@@ -127,7 +164,7 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
       coverage,
       tier_map: eng.tier_map,
       band_blur: eng.band_blur,
-      narrative: buildNarrative(eng.signals, coverage.verified),
+      narrative: buildNarrative(eng.signals, coverage.verified, sourcesText),
       missing: [{ gap: "Registry/court/tax not checked live", cta: "Manual check recommended", mock: false }],
     },
   };
