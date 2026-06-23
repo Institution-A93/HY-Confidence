@@ -60,9 +60,10 @@ The landing-page 200s were misleading; the real content paths have protection:
   `src/adapters/eregister.ts`** (F-REG-07, TIN-keyed) — verified live: Grand Candy → Mikayel & Karen
   Vardanyan, 50/50. ⚠ The site THROTTLES concurrent requests (parallel declaration fetches return
   empty) → fetch declarations SEQUENTIALLY. Name search is unreliable (Armenian exact-match) → key
-  by TIN. **Still gated (Login / paid extract):** executive director (F-REG-05), founder/participant
-  list + capital (F-REG-03/06), change history (F-REG-08), and PERSON search → so the cross-entity
-  affiliation graph (F-GRA, phoenix B-06) is NOT public.
+  by TIN. **Still gated behind login = Armenian e-ID (Mobile-ID / ID-card, NOT email+password; team
+  has none → blocked):** executive director (F-REG-05), founder/participant list + capital
+  (F-REG-03/06), change history (F-REG-08), and PERSON search → so the cross-entity affiliation graph
+  (F-GRA, phoenix B-06) is NOT public.
 - **cesa.am — ⛔ BLOCKED (likely).** Cloudflare + CodeIgniter; CSP references **reCAPTCHA**, so the
   proceedings search is probably captcha-gated. Needs a captcha-solving service or headless. Content
   is reachable at `/en/` but the search itself is the wall.
@@ -118,12 +119,15 @@ Facts: F-REG-01..08, seeds F-GRA-01/02. **Backbone of identity.** Recon answers 
 - ✅ **Beneficial owners are PUBLIC & free** via the annual BO declarations → BUILT (`eregister.ts`,
   F-REG-07). The declaration also carries citizenship + % + date-became-owner (feeds a future SN-10
   "BO absent/foreign" and the owner-tenure positive).
-- ⛔ **Login / paid extract still gates:** executive director (F-REG-05), participant list + capital
-  (F-REG-03/06), change history (F-REG-08), and **person search** (so F-GRA graph / phoenix B-06).
-  There is a `/en/login` and a paid extract (~3000 AMD, account + online payment) → D3.
+- ⛔ **Login-gated (the full registry card):** executive director (F-REG-05), participant list +
+  capital (F-REG-03/06), change history (F-REG-08), and **person search** (so F-GRA graph / phoenix
+  B-06). **Login requires Armenian e-ID — Mobile-ID or a chip ID-card (EKENG), NOT email/password**
+  (`/en/login` → 403, `/en/register` → 404: there is no public self-registration). **BLOCKED for us:
+  the team has neither Mobile-ID nor an ID-card** (decided 2026-06-23 — do not attempt account
+  creation). To unlock this tier later you need a person with Armenian e-ID credentials, or the paid
+  per-company extract (~3000 AMD; may itself require e-ID for the e-signature/payment) → D3.
 - ❌ **BODS bulk fallback is dead** (see the BODS finding above): no free bulk file exists; the
-  per-company route above is the way to owners now.
-- 🔎 Open: does login expand the public card to director/founders cheaply? Is registration free?
+  per-company beneficial-owners route above is the way to owners now.
 
 ## src.am — State Revenue Committee (tax) · Epic B2
 Facts: F-TAX-01 TIN+name, F-TAX-02 VAT, F-TAX-03 top-1000.
