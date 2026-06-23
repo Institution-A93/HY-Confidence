@@ -43,8 +43,10 @@ function deriveSignals(facts: Fact[]): Signal[] {
   const f = (cat: string) => facts.find((x) => x.catalog_id === cat);
 
   const san = f("F-SAN-01");
-  if (san && /POSSIBLE OFAC match/i.test(san.value)) {
-    out.push(mkSignal("B-05", "blocker", "-", [san.fact_id], "Director/UBO appears on the OFAC sanctions list."));
+  // Only a STRONG (confident) sanctions name match vetoes. A "Possible OFAC match" is surfaced as
+  // a manual-review CTA in runCheck — it must never auto-BLOCK on a coincidence of common words.
+  if (san && /sanctions match \(strong\)/i.test(san.value)) {
+    out.push(mkSignal("B-05", "blocker", "-", [san.fact_id], "Director/UBO appears on the OFAC sanctions list (strong name match)."));
   }
 
   const web = f("F-WEB-01");
@@ -193,6 +195,11 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
   const eng = computeVerdict({ signals, facts, coverage, fuzzyResolution: false });
 
   const name = input.entity_name || input.website || input.tin || "Counterparty";
+  // A non-blocking "possible" sanctions match surfaces as a review gap (the strong match already
+  // vetoed via B-05 in deriveSignals; this is the soft path that must NOT block).
+  const missing = [{ gap: "Enforcement, procurement, auction and pledge not checked live", cta: "Manual check recommended", mock: false }];
+  if (facts.some((ff) => ff.catalog_id === "F-SAN-01" && /Possible OFAC match/i.test(ff.value)))
+    missing.unshift({ gap: "Possible sanctions name match (unconfirmed)", cta: "Verify the counterparty name against the OFAC SDN list manually", mock: false });
   const fixture = {
     id: "live:" + (input.tin || input.entity_name || input.website || "q"),
     label: "Live check",
@@ -215,7 +222,7 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
       tier_map: eng.tier_map,
       band_blur: eng.band_blur,
       narrative: buildNarrative(eng.signals, coverage.verified, sourcesText),
-      missing: [{ gap: "Enforcement, procurement, auction and pledge not checked live", cta: "Manual check recommended", mock: false }],
+      missing,
     },
   };
   return fixture;
