@@ -117,23 +117,22 @@ function deriveSignals(facts: Fact[]): Signal[] {
   if (def) {
     const yr = yearIn(def.value);
     const d = decay(yr);
-    if (payDef > 0 && d > 0) {
-      // Payment orders = a creditor already obtained an enforceable order → unambiguous unpaid debt.
-      // This is the clean SN-01 the spec wants (debt/contract defendant), so it takes precedence over
-      // the broader net-civil proxy below; recency-scaled per R-06.
-      const base = (payDef >= 5 ? -15 : payDef >= 2 ? -12 : -10) * d;
-      out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `Subject of ${payDef} payment-order case(s) — a creditor already holds an enforceable order for unpaid debt${yr ? ` (most recent ${yr})` : ""}.`, base));
-    } else {
-      // No payment orders → fall back to the NET civil-defendant proxy. A company that sues at least
-      // as often as it is sued is enforcing its receivables (spec R-04), not distressed; raw defendant
-      // count just tracks its size. Case type/amount are captcha-gated, hence the proxy.
-      const net = civilDef - plaCount;
-      if (net >= 1 && d > 0) {
-        const base = (net >= 10 ? -15 : net >= 3 ? -12 : -10) * d;
-        out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `Net litigation target: ${civilDef} case(s) as defendant vs ${plaCount} as plaintiff${yr ? `, most recent ${yr}` : ""}.`, base));
-      } else if (net >= 1 && civilDef === 1) {
-        out.push(mkSignal("WN-07", "weak", "-", [def.fact_id], "A single, dated defendant case (>24 months old)."));
-      }
+    // SN-01 = the entity is a NET debt/litigation TARGET. Civil-defendant AND payment-order cases are
+    // both "against it"; a company that sues at least as often as it is sued is enforcing receivables
+    // (spec R-04), not distressed — so we net the total against its plaintiff activity. This keeps big,
+    // litigation-heavy-but-healthy companies out of SN-01 (a single payment order must not sink them).
+    // Payment orders are the clean unpaid-debt half → harsher band when they dominate. Case type/amount
+    // are captcha-gated, hence the net proxy.
+    const target = civilDef + payDef;
+    const net = target - plaCount;
+    if (net >= 1 && d > 0) {
+      const base = (payDef >= 5 || net >= 10 ? -15 : net >= 3 ? -12 : -10) * d;
+      const desc = payDef > 0
+        ? `Net debt/litigation target: ${civilDef} civil + ${payDef} payment-order case(s) vs ${plaCount} as plaintiff`
+        : `Net litigation target: ${civilDef} case(s) as defendant vs ${plaCount} as plaintiff`;
+      out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `${desc}${yr ? `, most recent ${yr}` : ""}.`, base));
+    } else if (net >= 1 && target === 1) {
+      out.push(mkSignal("WN-07", "weak", "-", [def.fact_id], "A single, dated defendant case (>24 months old)."));
     }
   }
 
