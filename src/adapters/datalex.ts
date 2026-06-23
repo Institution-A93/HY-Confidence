@@ -24,6 +24,7 @@
 import { request } from "node:https";
 import type { AdapterResult, SourceAdapter, Subject } from "../lib/adapter";
 import { makeFact } from "../lib/adapter";
+import { stripLegal } from "../lib/normalize";
 
 const HOST = "datalex.am";
 const SEARCH_PAGE = "/?app=AppCaseSearch";
@@ -104,7 +105,9 @@ interface GridResult {
 // so row[0] / the page is enough to read the most-recent case number for the recency signal;
 // totalCount carries the true total across all pages.
 async function gridSearch(cookie: string, filterData: Record<string, string>, cfg: CaseConfig): Promise<GridResult> {
-  const pagination = { page: 1, rows: 20, sidx: "", sord: "desc", _search: false, nd: 0 };
+  // 100 rows (not 20) so the token-containment guard below has a real sample to filter; totalCount
+  // still carries the full count for scaling when there are more pages than this.
+  const pagination = { page: 1, rows: 100, sidx: "", sord: "desc", _search: false, nd: 0 };
   const arg = JSON.stringify([filterData, pagination, cfg.gsd, false]);
   const form = new URLSearchParams({
     appName: "AppCaseSearch",
@@ -143,7 +146,11 @@ async function gridSearch(cookie: string, filterData: Record<string, string>, cf
 // courts name the party and returns 0 (e.g. «ԱՐԱՐԱՏ ՑԵՄԵՆՏ ԳՐՈՒՊ» → 0, «ԱՐԱՐԱՏ ՑԵՄԵՆՏ» → 20). So if a
 // ≥3-word name finds nothing, retry once with the last word dropped — the distinctive tokens lead,
 // descriptors trail; staying ≥2 words keeps it specific.
-async function gridSearchByName(cookie: string, role: Role, name: string, cfg: CaseConfig, retry = true): Promise<GridResult> {
+interface NamedResult extends GridResult {
+  usedName: string; // the name actually searched (may be the retry-trimmed one) — what the guard checks against
+}
+
+async function gridSearchByName(cookie: string, role: Role, name: string, cfg: CaseConfig, retry = true): Promise<NamedResult> {
   const { name: nameField, type: typeField } = ROLE_FIELD[role];
   const run = (n: string) => gridSearch(cookie, { [nameField]: n, [typeField]: "organization" }, cfg);
   const first = await run(name);
@@ -151,7 +158,47 @@ async function gridSearchByName(cookie: string, role: Role, name: string, cfg: C
   // The retry trades precision for recall — fine for the non-blocking civil/payment signals, but the
   // caller DISABLES it for bankruptcy (retry=false): B-01 is a hard veto, and a broadened name could
   // match a namesake's old bankruptcy and falsely BLOCK an active company.
-  return retry && first.totalCount === 0 && words.length >= 3 ? run(words.slice(0, -1).join(" ")) : first;
+  if (retry && first.totalCount === 0 && words.length >= 3) {
+    const trimmed = words.slice(0, -1).join(" ");
+    return { ...(await run(trimmed)), usedName: trimmed };
+  }
+  return { ...first, usedName: name };
+}
+
+// Comparable key: drop legal forms + «»quotes (stripLegal) and every non-letter, so case, spacing,
+// «», and ՍՊԸ/ՓԲԸ suffixes don't matter when deciding whether a party IS the queried entity.
+export function nameKey(s: string): string {
+  return stripLegal(s).toLowerCase().replace(/[^a-z0-9ա-և]/g, "");
+}
+
+// TOKEN-CONTAINMENT GUARD. Datalex name search is a normalized substring/token match, so a query
+// over-matches: «ԱՊԱՎԵՆ» also returns «Ապավեն Տերմինալ» / «Հույսի Ապավեն» (different firms) and
+// multi-party rows; «Գրանդ» returns 36 different "Grand …" companies. A datalex party field can
+// list several co-parties ("A ՍՊԸ, B ՓԲԸ, …"), so we keep a row only if ONE listed party IS the
+// queried entity — its key equals the query key (allowing an unstripped short form, ≤4 extra chars)
+// — not merely contains it inside a longer, different name. (This still cannot split two DIFFERENT
+// entities that share the IDENTICAL name, e.g. the active vs liquidated «ԱՊԱՎԵՆ» — that needs a TIN/graph.)
+export function partyMatchesQuery(partyField: string, queryKey: string): boolean {
+  if (!queryKey) return false;
+  return partyField.split(/[,،;]/).some((p) => {
+    const k = nameKey(p);
+    return k === queryKey || (k.startsWith(queryKey) && k.length - queryKey.length <= 4);
+  });
+}
+
+interface Guarded {
+  count: number;
+  rows: Row[];
+}
+
+// Filter a result to rows that really concern the queried entity, then project the full totalCount
+// through the observed keep-ratio (datalex returns the true totalCount but only one page of rows).
+// When totalCount ≤ the page we fetched, the guarded count is exact.
+function applyGuard(res: NamedResult, side: "respondant_name" | "claimant_name"): Guarded {
+  const key = nameKey(res.usedName);
+  const rows = res.rows.filter((r) => partyMatchesQuery(r[side] || "", key));
+  const count = res.rows.length === 0 ? 0 : res.totalCount <= res.rows.length ? rows.length : Math.round((res.totalCount * rows.length) / res.rows.length);
+  return { count, rows };
 }
 
 // Most-recent filing year across a page of rows. Armenian case numbers end in the 2-digit year:
@@ -186,12 +233,18 @@ export const datalexAdapter: SourceAdapter = {
       const cookie = await getSession();
       // Four independent searches share the one PHP session (getGridDataList is self-contained), so
       // they run in parallel: defendant + plaintiff (civil), debtor (bankruptcy), debtor (payment order).
-      const [def, pla, bkr, pay] = await Promise.all([
+      const [defR, plaR, bkrR, payR] = await Promise.all([
         gridSearchByName(cookie, "defendant", name, CIVIL),
         gridSearchByName(cookie, "plaintiff", name, CIVIL),
         gridSearchByName(cookie, "defendant", name, BANKRUPTCY, false), // strict: B-01 must not false-block on a namesake
         gridSearchByName(cookie, "defendant", name, PAYMENT),
       ]);
+      // Token-containment guard: keep only the rows whose matched party IS this entity (drops
+      // co-parties and same-substring namesakes like «Ապավեն Տերմինալ»), and scale the count.
+      const def = applyGuard(defR, "respondant_name");
+      const pla = applyGuard(plaR, "claimant_name");
+      const bkr = applyGuard(bkrR, "respondant_name");
+      const pay = applyGuard(payR, "respondant_name");
       // Court facts are ALWAYS name-matched: datalex has no TIN field, so even a TIN-resolved subject's
       // cases are found by name and can include a same-name entity (e.g. an active and a liquidated
       // «ԱՊԱՎԵՆ» share one case set). So we mark court "fuzzy" regardless of subject.tin → R-08 damps the
@@ -202,12 +255,12 @@ export const datalexAdapter: SourceAdapter = {
       const facts = [];
       // F-CRT-02 folds civil-defendant + payment-order debt exposure into one fact; payment orders
       // are the clean "owes money" half (deriveSignals prefers them for SN-01).
-      if (def.totalCount > 0 || pay.totalCount > 0) {
+      if (def.count > 0 || pay.count > 0) {
         const rows = def.rows.length ? def.rows : pay.rows;
         const yr = mostRecentCaseYear([...def.rows, ...pay.rows]);
         const parts: string[] = [];
-        if (def.totalCount > 0) parts.push(`${def.totalCount} civil case(s)`);
-        if (pay.totalCount > 0) parts.push(`${pay.totalCount} payment-order(s)`);
+        if (def.count > 0) parts.push(`${def.count} civil case(s)`);
+        if (pay.count > 0) parts.push(`${pay.count} payment-order(s)`);
         facts.push(
           makeFact({
             catalog_id: "F-CRT-02",
@@ -222,7 +275,7 @@ export const datalexAdapter: SourceAdapter = {
           }),
         );
       }
-      if (pla.totalCount > 0) {
+      if (pla.count > 0) {
         const yr = mostRecentCaseYear(pla.rows);
         facts.push(
           makeFact({
@@ -230,7 +283,7 @@ export const datalexAdapter: SourceAdapter = {
             subject: name,
             domain: "court",
             field: "plaintiff_cases",
-            value: `Plaintiff in ${pla.totalCount} civil case(s)${yr ? `; most recent ${yr}` : ""}`,
+            value: `Plaintiff in ${pla.count} civil case(s)${yr ? `; most recent ${yr}` : ""}`,
             source: this.source,
             url: caseUrl(pla.rows[0]),
             fetched_at: now,
@@ -238,7 +291,7 @@ export const datalexAdapter: SourceAdapter = {
           }),
         );
       }
-      if (bkr.totalCount > 0) {
+      if (bkr.count > 0) {
         const yr = mostRecentCaseYear(bkr.rows);
         facts.push(
           makeFact({
@@ -246,7 +299,7 @@ export const datalexAdapter: SourceAdapter = {
             subject: name,
             domain: "court",
             field: "bankruptcy_cases",
-            value: `Debtor in ${bkr.totalCount} bankruptcy case(s)${yr ? `; most recent ${yr}` : ""} (${bkr.rows[0]?.case_number || "—"})`,
+            value: `Debtor in ${bkr.count} bankruptcy case(s)${yr ? `; most recent ${yr}` : ""} (${bkr.rows[0]?.case_number || "—"})`,
             source: this.source,
             url: caseUrl(bkr.rows[0]),
             fetched_at: now,

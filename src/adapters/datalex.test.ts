@@ -2,7 +2,7 @@
 // by tools/smoke-adapters.ts against the live portal; the deterministic suite tests only the
 // parsing helpers that turn grid rows into the recency signal.
 import { describe, it, expect } from "vitest";
-import { mostRecentCaseYear, caseUrl } from "./datalex";
+import { mostRecentCaseYear, caseUrl, nameKey, partyMatchesQuery } from "./datalex";
 
 describe("mostRecentCaseYear", () => {
   it("parses the 2-digit year suffix of Armenian case numbers", () => {
@@ -23,6 +23,29 @@ describe("mostRecentCaseYear", () => {
   it("returns null when no case number carries a parseable year (caller declines the recency rule)", () => {
     expect(mostRecentCaseYear([])).toBeNull();
     expect(mostRecentCaseYear([{ case_number: "" }, { case_number: "no-year-here" }])).toBeNull();
+  });
+});
+
+describe("token-containment guard", () => {
+  // nameKey strips legal form / «» / case / spacing so the same entity keys identically.
+  it("nameKey normalizes form, quotes, case and spacing", () => {
+    expect(nameKey("«Ապավեն» ՍՊԸ")).toBe(nameKey("ԱՊԱՎԵՆ"));
+    expect(nameKey("ԱՐԱՐԱՏ ՑԵՄԵՆՏ")).toBe(nameKey("<<Արարատցեմենտ>> ՓԲԸ")); // 2 words vs glued
+  });
+
+  const apaven = nameKey("ԱՊԱՎԵՆ");
+  it("keeps the queried entity (incl. as one of several co-parties)", () => {
+    expect(partyMatchesQuery("«Ապավեն» ՍՊԸ", apaven)).toBe(true);
+    expect(partyMatchesQuery("Դարֆ ՍՊԸ, Միկմետալ ՓԲԸ, Ապավեն ՍՊԸ, Էյչ-Էս-Բի բանկ", apaven)).toBe(true);
+  });
+  it("rejects a different, longer name that merely contains the query", () => {
+    expect(partyMatchesQuery("«Ապավեն Տերմինալ» ՓԲԸ", apaven)).toBe(false); // Apaven Terminal — different firm
+    expect(partyMatchesQuery(",,Հույսի Ապավեն,, ԲՀ", apaven)).toBe(false); // Huysi Apaven — different firm
+  });
+  it("rejects a same-prefix but different company (Grand Candy vs Grand Tobacco)", () => {
+    const gc = nameKey("Գրանդ Քենդի");
+    expect(partyMatchesQuery("Գրանդ Քենդի ՍՊԸ", gc)).toBe(true);
+    expect(partyMatchesQuery("Գրանդ Տոբակո ՍՊԸ", gc)).toBe(false);
   });
 });
 

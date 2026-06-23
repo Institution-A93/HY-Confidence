@@ -169,9 +169,19 @@ the "hardest, headless" assumption with a plain JSON API.
   counts + recency only: SN-01 not amount-scaled, WP-09 can't confirm "wins", B-01 infers "open"
   from recency. Case URLs `?app=AppCaseSearch&case_id=<external_id>` ARE replayable (link the user;
   they solve the captcha to read the detail).
-- Follow-ups: payment_order tab (debt-collection defendant — strong SN-01 signal); person/sole-
-  proprietor party search (first+last name fields); token-containment guard for tighter matching;
-  claim-amount parsing if/when the detail captcha is solved.
+- **Match precision (recon 2026-06-23) + token-containment guard (BUILT).** The name search is a
+  NORMALIZED SUBSTRING/token match (case/spacing/«»/legal-form insensitive), so it OVER-matches:
+  «ԱՊԱՎԵՆ» also returns «Ապավեն Տերմինալ» / «Հույսի Ապավեն» (different firms) + multi-party rows;
+  «Գրանդ» → 36 distinct "Grand …" companies. A distinctive FULL name (Grand Candy, Ararat Cement) is
+  precise (all results are spelling variants of the target). Mitigation built into `datalex.ts`:
+  fetch 100 rows, then `partyMatchesQuery` keeps only rows where a comma-split party's `nameKey`
+  EQUALS the query key (±4 chars for an unstripped form) — drops co-parties/namesakes — and scales
+  totalCount by the keep-ratio. Verified: «ԱՊԱՎԵՆ» defendant 14→8. **Still cannot split two DIFFERENT
+  entities with the IDENTICAL name** (active vs liquidated «ԱՊԱՎԵՆ» share the count) — that needs the
+  TIN/graph; hence court facts are also always `match:"fuzzy"` (R-08 damps SN-01/WP-09 ×0.7).
+- ✅ DONE: payment_order tab (debt-collection defendant → folded into SN-01); name retry for trailing
+  descriptor words (ԳՐՈՒՊ); token-containment guard. Follow-ups: person/sole-proprietor party search
+  (first+last name fields); claim-amount parsing if/when the detail captcha is solved.
 
 ## harkadir.am — DAHK / compulsory enforcement (enforcement) · Epic D1
 Facts: F-ENF-01 open proceedings — strongest free "won't pay" signal (→ blocker B-03).
