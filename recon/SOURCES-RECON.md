@@ -49,11 +49,20 @@ The landing-page 200s were misleading; the real content paths have protection:
   which is most of what e-register was wanted for. Adapter: `src/adapters/srcam.ts`. Verified
   live: Grand Candy → TIN 02226764. (`/en/search` and `/en/searchInternalData` are decoys —
   site-wide search and customs data; `taxpayerSearchData` is the taxpayer one.)
-- **e-register.am — ⛔ BLOCKED.** Behind **Radware Bot Manager**: real content paths 302-redirect
-  a datacenter IP to `validate.perfdrive.com` (our IP is base64'd into the challenge URL). Needs a
-  headless browser that solves the JS challenge, or a residential proxy. Not buildable as plain HTTP.
-  Mitigated for now by src.am covering the registry basics; founders/UBO/history still need this
-  (or the paid extract).
+- **e-register — ✅ PARTLY BUILT (owners), NO LONGER WALLED (re-recon 2026-06-23).** The old
+  `e-register.am` was Radware-walled (perfdrive challenge). The registry has since moved to the
+  justice-sector platform **`e-register.moj.am`**, which is **OPEN** — verified 200 / no challenge
+  from BOTH an Armenian residential IP (Yerevan, AS207810) AND the Frankfurt datacenter, so it is
+  neither geo- nor datacenter-blocked. **No proxy, no headless needed.** It is a server-rendered
+  SPA (no JSON API; Network shows 0 XHR on search). Flow: `GET /en/search/companies?query=<TIN>`
+  → `/en/companies/<internal-id>` → annual **BO declaration** links → `/declarations/<uuid>` whose
+  Section B lists beneficial owners (name, citizenship, % participation, date became owner). **Built:
+  `src/adapters/eregister.ts`** (F-REG-07, TIN-keyed) — verified live: Grand Candy → Mikayel & Karen
+  Vardanyan, 50/50. ⚠ The site THROTTLES concurrent requests (parallel declaration fetches return
+  empty) → fetch declarations SEQUENTIALLY. Name search is unreliable (Armenian exact-match) → key
+  by TIN. **Still gated (Login / paid extract):** executive director (F-REG-05), founder/participant
+  list + capital (F-REG-03/06), change history (F-REG-08), and PERSON search → so the cross-entity
+  affiliation graph (F-GRA, phoenix B-06) is NOT public.
 - **cesa.am — ⛔ BLOCKED (likely).** Cloudflare + CodeIgniter; CSP references **reCAPTCHA**, so the
   proceedings search is probably captcha-gated. Needs a captcha-solving service or headless. Content
   is reachable at `/en/` but the search itself is the wall.
@@ -100,17 +109,21 @@ IS name-attributable). See the datalex section below.
 
 ---
 
-## e-register.am — State Register (registry, graph) · Epics B1, D3, E1
-Facts: F-REG-01..08, seeds F-GRA-01/02. **Backbone of identity.**
-- 🔎 Canonical search platform: `e-register.am` vs the newer `e-services.moj.am` (sole-proprietor
-  services already migrated). Which one serves company search at build time?
-- 🔎 Search request: GET vs POST, param names, viewstate/CSRF. Captcha on search? (historically none).
-- 🔎 Person/participant search availability and whether it is gated to the paid tier (if gated →
-  fall back to the BODS bulk route for the graph, E1).
-- ⚠ Query in **Armenian script** — transliteration search is unreliable (use `normalize.ts`).
-- ⚠ Free tier = basic card (F-REG-01/02/04/05 + basic BO). F-REG-06 shares, F-REG-08 history,
-  pledge detail need a **paid extract** (~3000 AMD, account + online payment) → D3.
-  - 🔎 Extract format (PDF vs HTML), whether an Armenian e-signature is required for mere extracts.
+## e-register.moj.am — State Register (registry, graph) · Epics B1, D3, E1
+Facts: F-REG-01..08, seeds F-GRA-01/02. **Backbone of identity.** Recon answers (2026-06-23):
+- ✅ **Canonical platform = `e-register.moj.am`** ("justice-sector digital services"). Company search:
+  `GET /en/search/companies?query=<text>` (server-rendered, no JSON API, no captcha, no token).
+  Search by **TIN** is exact and reliable; **Armenian name search is unreliable** (returns 0 for
+  «ԳՐԱՆԴ ՔԵՆԴԻ») → always key by TIN.
+- ✅ **Beneficial owners are PUBLIC & free** via the annual BO declarations → BUILT (`eregister.ts`,
+  F-REG-07). The declaration also carries citizenship + % + date-became-owner (feeds a future SN-10
+  "BO absent/foreign" and the owner-tenure positive).
+- ⛔ **Login / paid extract still gates:** executive director (F-REG-05), participant list + capital
+  (F-REG-03/06), change history (F-REG-08), and **person search** (so F-GRA graph / phoenix B-06).
+  There is a `/en/login` and a paid extract (~3000 AMD, account + online payment) → D3.
+- ❌ **BODS bulk fallback is dead** (see the BODS finding above): no free bulk file exists; the
+  per-company route above is the way to owners now.
+- 🔎 Open: does login expand the public card to director/founders cheaply? Is registration free?
 
 ## src.am — State Revenue Committee (tax) · Epic B2
 Facts: F-TAX-01 TIN+name, F-TAX-02 VAT, F-TAX-03 top-1000.

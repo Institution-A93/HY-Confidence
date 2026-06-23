@@ -47,6 +47,7 @@ src/
     srcam.ts                             SRC tax + registry basics + identity resolver (source of truth)
     azdarar.ts                           Azdarar public notices → liquidation/bankruptcy (name-keyed)
     datalex.ts                           Datalex courts → plaintiff/defendant/bankruptcy (name-keyed)
+    eregister.ts                         State Register beneficial owners (e-register.moj.am, TIN-keyed)
 recon/SOURCES-RECON.md                   per-source build checklist for the fragile [R] scrapers
 tools/                                   one-shot scripts (CSS extraction, adapter smoke)
 Counterparty Check (standalone).html     the original Claude Design mockup (reference)
@@ -58,7 +59,8 @@ Counterparty Check (standalone).html     the original Claude Design mockup (refe
 |---|---|---|
 | Scoring engine over all 4 fixtures | Sanctions (OFAC), WHOIS (.am), Email MX | Enforcement (cesa.am — captcha), |
 | Fixture-driven UI (S1–S4) | SRC tax + registry + resolver (src.am) | auction (debtor not public → via cesa), |
-| Live `/check` + `/resolve` end-to-end | Notices (Azdarar), Courts (Datalex) | procurement, pledge, ownership graph |
+| Live `/check` + `/resolve` end-to-end | Notices (Azdarar), Courts (Datalex) | procurement, pledge; affiliation graph |
+| | Beneficial owners (e-register.moj.am) | + director/founders/history (login-gated) |
 
 The frontend renders the Fact/Verdict JSON contract; the scoring engine is pure logic over
 Facts (client- or server-side). Data acquisition for the fragile sources needs a backend and

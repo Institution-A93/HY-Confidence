@@ -13,6 +13,7 @@ import { mxAdapter } from "../src/adapters/mx";
 import { srcAdapter, resolveBySrc } from "../src/adapters/srcam";
 import { azdararAdapter } from "../src/adapters/azdarar";
 import { datalexAdapter } from "../src/adapters/datalex";
+import { eregisterAdapter } from "../src/adapters/eregister";
 import { resilientFetch, TtlCache, CircuitBreaker } from "../src/lib/fetcher";
 import { COVERAGE_DOMAINS } from "../src/lib/adapter";
 import { stripLegal } from "../src/lib/normalize";
@@ -25,8 +26,10 @@ const PORT = Number(process.env.PORT || 8080);
 const cache = new TtlCache<AdapterResult>(6 * 60 * 60 * 1000); // 6h
 const breaker = new CircuitBreaker();
 
-// Keyed adapters run with the raw subject (TIN / email / website / person).
-const KEYED_ADAPTERS = [sanctionsAdapter, whoisAdapter, mxAdapter];
+// Keyed adapters run with the raw subject (TIN / email / website / person). e-register is
+// TIN-keyed (beneficial owners by the confirmed TIN) — it enriches the registry domain src.am
+// already covers, so it adds owner Facts without changing the coverage count.
+const KEYED_ADAPTERS = [sanctionsAdapter, whoisAdapter, mxAdapter, eregisterAdapter];
 // Name-keyed adapters need the CANONICAL Armenian name, so they run after src.am resolves it.
 const NAME_KEYED_ADAPTERS = [azdararAdapter, datalexAdapter];
 

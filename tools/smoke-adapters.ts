@@ -6,6 +6,7 @@ import { whoisAdapter } from "../src/adapters/whois.ts";
 import { mxAdapter } from "../src/adapters/mx.ts";
 import { sanctionsAdapter } from "../src/adapters/sanctions.ts";
 import { datalexAdapter } from "../src/adapters/datalex.ts";
+import { eregisterAdapter } from "../src/adapters/eregister.ts";
 import type { Subject } from "../src/lib/adapter.ts";
 
 const now = () => new Date().toISOString();
@@ -36,6 +37,10 @@ await run("Datalex — Հայաստանի էլեկտրական ցանցեր (exp
 );
 await run("Datalex — Թոփ Ավտո ՍՊԸ (expect bankruptcy F-CRT-03 → B-01)", () =>
   datalexAdapter.fetch({ name: "Թոփ Ավտո ՍՊԸ" }, now()),
+);
+// e-register: TIN-keyed. Grand Candy → expect beneficial owners (the Vardanyan brothers, 50/50).
+await run("e-register — Grand Candy TIN 02226764 (expect F-REG-07 owners)", () =>
+  eregisterAdapter.fetch({ tin: "02226764" }, now()),
 );
 
 console.log("\nsmoke done.");
