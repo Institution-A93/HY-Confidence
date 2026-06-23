@@ -88,33 +88,31 @@ export function EvidenceLinks({ fixture, ids }: { fixture: Fixture; ids?: string
   );
 }
 
+// src.am returns the status in Armenian (the full enum: Գործող / Նոր գրանցված / Ժամանակավոր
+// դադարեցված / Լուծարման գործընթացում / Լուծարված / Հաշվառումից հանված / Սնանկ / Մահացած), so each
+// rule matches the Armenian root as well as EN/RU and maps to a translated label + chip color —
+// otherwise non-active statuses fell through and rendered raw Armenian. Order matters: the active
+// root is the full word գործող (not գործ, which also appears in "լուծարման գործընթաց"); the more
+// specific roots are listed before the generic ones.
+const STATUS_RULES: [RegExp, string, "st_active" | "st_newreg" | "st_suspended" | "st_liquidated" | "st_deregistered" | "st_bankrupt" | "st_deceased" | "st_reorg"][] = [
+  [/active|գործող|активн/, "active", "st_active"],
+  [/նոր գրանց|newly reg|нов\w* регистрац/, "active", "st_newreg"],
+  [/ժամանակավոր|դադարեց|suspend|приостанов/, "warn", "st_suspended"],
+  [/bankrupt|սնանկ|банкрот/, "danger", "st_bankrupt"],
+  [/liquidat|լուծ|ликвид/, "danger", "st_liquidated"],
+  [/հաշվառում|deregist|снят/, "danger", "st_deregistered"],
+  [/մահացած|deceased|умер|скончал/, "danger", "st_deceased"],
+  [/reorg|վերակազմ|реорг/, "warn", "st_reorg"],
+];
+
 export function StatusChip({ status }: { status?: string }) {
   const t = useT();
   const s = (status || "").toLowerCase();
-  let cls = "chip";
-  let label = status || "—";
-  // src.am returns the status in Armenian (Գործող / Լուծարված / Սնանկ …), so each branch matches the
-  // Armenian root as well as English/Russian, AND sets a translated label — otherwise non-active
-  // statuses fell through and rendered the raw Armenian text. Bankrupt is tested before liquidated
-  // (both are "danger"); the active root is the full word գործող, not just գործ, so it does not match
-  // "լուծարման գործընթաց" (liquidation process).
-  if (/active|գործող|активн/.test(s)) {
-    cls += " active";
-    label = t("st_active");
-  } else if (/bankrupt|սնանկ|банкрот/.test(s)) {
-    cls += " danger";
-    label = t("st_bankrupt");
-  } else if (/liquidat|լուծ|ликвид/.test(s)) {
-    cls += " danger";
-    label = t("st_liquidated");
-  } else if (/reorg|suspend|վերակազմ|կասեց|реорг|приостан/.test(s)) {
-    cls += " warn";
-    label = t("st_reorg");
-  }
+  const rule = STATUS_RULES.find(([re]) => re.test(s));
   return (
-    <span className={cls}>
+    <span className={"chip" + (rule ? " " + rule[1] : "")}>
       <span className="dot"></span>
-      {label}
+      {rule ? t(rule[2]) : status || "—"}
     </span>
   );
 }

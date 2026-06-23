@@ -79,6 +79,10 @@ export const I18N: Record<LangCode, Dict> = {
     st_liquidated: "Liquidated",
     st_bankrupt: "Bankrupt",
     st_reorg: "Reorganization",
+    st_newreg: "Newly registered",
+    st_suspended: "Suspended",
+    st_deregistered: "Deregistered",
+    st_deceased: "Deceased",
 
     dom_registry: "Registry",
     dom_graph: "Affiliations",
@@ -211,6 +215,10 @@ export const I18N: Record<LangCode, Dict> = {
     st_liquidated: "Ликвидирована",
     st_bankrupt: "Банкрот",
     st_reorg: "Реорганизация",
+    st_newreg: "Новая регистрация",
+    st_suspended: "Приостановлена",
+    st_deregistered: "Снята с учёта",
+    st_deceased: "Умер",
 
     dom_registry: "Реестр",
     dom_graph: "Связи",
@@ -343,6 +351,10 @@ export const I18N: Record<LangCode, Dict> = {
     st_liquidated: "Լուծարված",
     st_bankrupt: "Սնանկ",
     st_reorg: "Վերակազմակերպում",
+    st_newreg: "Նոր գրանցված",
+    st_suspended: "Ժամանակավոր դադարեցված",
+    st_deregistered: "Հաշվառումից հանված",
+    st_deceased: "Մահացած",
 
     dom_registry: "Գրանցամատյան",
     dom_graph: "Կապեր",
