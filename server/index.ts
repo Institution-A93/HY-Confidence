@@ -168,15 +168,19 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
     website: input.website || (input.email ? input.email.split("@")[1] : undefined),
   };
 
-  // Phase 1: src.am — identity + registry basics; yields the canonical Armenian name.
+  // Phase 1: src.am — identity + registry basics; yields the canonical Armenian name AND the TIN.
   const srcRes = await resilientFetch(srcAdapter, subject, { cache, breaker });
   const taxVal = srcRes.facts.find((f) => f.catalog_id === "F-TAX-01")?.value || "";
   const canonicalName = taxVal.includes(" — TIN") ? stripLegal(taxVal.split(" — TIN")[0]) : subject.name || "";
-  const nameSubject: Subject = { ...subject, name: canonicalName };
+  // Propagate the TIN src.am resolved so the TIN-keyed adapters (e-register owners) work even when
+  // the caller passed only a name — the resolver is the single place the TIN gets pinned.
+  const resolvedTin = subject.tin || (taxVal.match(/— TIN (\d+)/) || [])[1] || undefined;
+  const keyedSubject: Subject = { ...subject, tin: resolvedTin };
+  const nameSubject: Subject = { ...subject, tin: resolvedTin, name: canonicalName };
 
-  // Phase 2: keyed adapters (raw subject) + name-keyed adapters (canonical name), in parallel.
+  // Phase 2: keyed adapters (raw subject + resolved TIN) + name-keyed adapters (canonical name).
   const rest = await Promise.all([
-    ...KEYED_ADAPTERS.map((a) => resilientFetch(a, subject, { cache, breaker })),
+    ...KEYED_ADAPTERS.map((a) => resilientFetch(a, keyedSubject, { cache, breaker })),
     ...NAME_KEYED_ADAPTERS.map((a) => resilientFetch(a, nameSubject, { cache, breaker })),
   ]);
   const results = [srcRes, ...rest];
