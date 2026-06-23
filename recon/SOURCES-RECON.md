@@ -195,22 +195,41 @@ Facts: F-NTC-01 liquidation / creditor-call / reorg / capital-reduction (→ B-0
 - 🔎 Does search cover full text or titles only? If titles only, pull category feeds and grep locally.
 - 🔎 Classify into the four flag types by title keywords; TIN usually present in the notice text.
 
-## armeps.am / gnumner.am — Procurement (procurement) · Epic E2
-Facts: F-PRC-01 award wins by supplier (→ SP-03 evidence).
-- 🔎 Which surface exposes a **supplier-name search** vs requiring iteration over award notices?
-  (gnumner historically lists machine-readable announcements.)
-- Fallback: periodically ingest award announcements into a local index, query locally.
+## armeps.am — Procurement (procurement) · Epic E2 — ✅ BUILT & LIVE (recon 2026-06-23)
+Facts: F-PRC-01 award wins by supplier (→ SP-03 evidence). Adapter: `src/adapters/procurement.ts`.
+- ✅ **armeps PPCM exposes a PUBLIC JSON API** (`https://armeps.am/ppcm/public/…`, no captcha/CF, valid
+  TLS) that IS supplier-queryable → the "ingest award announcements into a local index" fallback is
+  **RETIRED**. Two POSTs: `/autocomplete/get-supplier-list` `{value:<name>}` → `[{id, taxpayerId,
+  name}]` (id is a UUID, not the TIN — autocomplete by name, then confirm `taxpayerId===subject.tin`
+  → exact), then `/contracts/count` + `/contracts/list` → rows with `dateSigned` (epoch ms),
+  `contractValue`, `supplierName/supplierTaxpayerId`, `tenderTitle(En)`, `authorityName(En/Hy)` (buyer in-row).
+- ⚠ Gotchas (verified): `list` 500s without the FULL filter object (count is lenient); `order.field`
+  is SNAKE_CASE (`date_signed`); the `dateSigned` range filter has an undocumented 500-prone format →
+  the SP-03 ≤36-month window is applied IN CODE. **gnumner dropped** — aggregate stats only, no supplier search.
+- ⚠ Name matching is dirty (free-form display names, some Latin-transliterated, occasional encoding
+  corruption) → name-only queries are genuinely fuzzy; TIN-confirm is the de-fuzz. SP-03 is positive,
+  so a false-empty only fails to award credit (safe) — never asserts "not a real company".
 
 ## ajurd.am — Compulsory auctions (auction) · Epic E3
 Facts: F-AUC-01 assets under forced sale (→ SN-05).
 - 🔎 Debtor-name search vs listing iteration; lot page structure (debtor field).
 - ⚠ Low volume → daily full-listing ingest into a local index is simplest.
 
-## Pledge register (pledge) · Epic F2 — may be deferred
-Facts: F-PLG-01 movable pledges (→ SN-06, R-05).
-- ⚠ Access tier **unconfirmed**. 🔎 Determine if public or gated to banks/notaries.
-- If gated → move F-PLG-01 / SN-06 / R-05 to deferred and **drop the coverage denominator to 9**
-  (the engine's coverage accounting already supports a dynamic total).
+## registration.am — Pledge register (pledge) · Epic F2 — ✅ BUILT & LIVE (recon 2026-06-23)
+Facts: F-PLG-01 movable pledges (→ SN-06, R-05). Adapter: `src/adapters/pledge.ts`.
+- ✅ **PUBLIC** — the canonical register is its own site `registration.am` ("Շարժական Գույքի Նկատմամբ
+  Ապահովված Իրավունքների Գրանցամատյան"), NOT under the e-register umbrella, NOT cda.am. No login, no
+  captcha, no fee for searching (the login box is for FILERS — banks/notaries). **F-PLG-01/SN-06/R-05
+  stay live; the coverage denominator stays 10** (does NOT drop to 9).
+- Same **BARL `?app=AppX`** family as datalex (Apache/PHP 5.6). One GET seeds a PHPSESSID; org search
+  is a server-rendered POST (`?app=AppSearch`, `ModCaseSearchAction=advSearch`,
+  `data[burdensome_person][organization][organization_name]` or `…[state_registry_number]`). Results
+  are an HTML table of `<tr class="case_row" data-case_url=…>`: cols = reg-type | movable property |
+  reg date | Պարտատեր (creditor) | Պարտապան (debtor, comma-separated co-debtors) | view icon.
+- We score only `Ծանրաբեռնում` (pledge) rows; `Սահմանափակում` (restriction/tax lien) is a separate
+  follow-up signal. Same token-containment guard as datalex (debtor field can list co-debtors).
+  Empty grid → `warning_box`/"…չեն գտնվել…" → verified_empty (R-09 distinguishable). Name-keyed →
+  `match:"fuzzy"` (R-08 ×0.7); de-fuzz via the state-registry-number field is a follow-up.
 
 ---
 

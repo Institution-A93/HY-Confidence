@@ -14,6 +14,8 @@ import { srcAdapter, resolveBySrc } from "../src/adapters/srcam";
 import { azdararAdapter } from "../src/adapters/azdarar";
 import { datalexAdapter } from "../src/adapters/datalex";
 import { eregisterAdapter } from "../src/adapters/eregister";
+import { pledgeAdapter } from "../src/adapters/pledge";
+import { procurementAdapter } from "../src/adapters/procurement";
 import { resilientFetch, TtlCache, CircuitBreaker } from "../src/lib/fetcher";
 import { COVERAGE_DOMAINS } from "../src/lib/adapter";
 import { stripLegal } from "../src/lib/normalize";
@@ -31,7 +33,8 @@ const breaker = new CircuitBreaker();
 // already covers, so it adds owner Facts without changing the coverage count.
 const KEYED_ADAPTERS = [sanctionsAdapter, whoisAdapter, mxAdapter, eregisterAdapter];
 // Name-keyed adapters need the CANONICAL Armenian name, so they run after src.am resolves it.
-const NAME_KEYED_ADAPTERS = [azdararAdapter, datalexAdapter];
+// (procurement also reads the resolved TIN to CONFIRM the supplier match — see nameSubject below.)
+const NAME_KEYED_ADAPTERS = [azdararAdapter, datalexAdapter, pledgeAdapter, procurementAdapter];
 
 // weightOverride lets a detector pass a scaled base weight (e.g. SN-01 after R-06 recency decay);
 // the engine still applies R-08/R-01 on top of whatever weight_base we hand it.
@@ -93,6 +96,31 @@ function deriveSignals(facts: Fact[]): Signal[] {
       out.push(mkSignal("SN-04", "strong", "-", [notice.fact_id], "Capital-reduction notice published — equity being pulled out."));
     } else if (/Creditor-call notice/.test(notice.value)) {
       out.push(mkSignal("SN-04", "strong", "-", [notice.fact_id], "Creditor-call notice published."));
+    }
+  }
+
+  // Procurement (armeps): F-PRC-01 only carries wins already filtered to the ≤36mo SP-03 window
+  // (the adapter applies it), so its presence IS the signal — a positive credibility marker.
+  const prc = f("F-PRC-01");
+  if (prc) out.push(mkSignal("SP-03", "strong", "+", [prc.fact_id], `State-procurement wins in the last 36 months — a real, operating supplier. ${prc.value}`));
+
+  // Pledge (registration.am). R-05: a movable-property pledge is normal working-capital financing
+  // and is NEUTRAL on a mature entity. SN-06 fires ONLY on the distress pattern — a FRESH pledge
+  // (≤12mo) on a YOUNG entity (≤2y) freshly encumbering its assets. Entity age comes from F-REG-02.
+  const plg = f("F-PLG-01");
+  if (plg) {
+    const dm = plg.value.match(/most recent (\d{2})-(\d{2})-(\d{4})/);
+    const regYr = reg ? Number((reg.value.match(/(\d{4})/) || [])[1]) : 0;
+    const entityAge = regYr ? new Date().getFullYear() - regYr : 99;
+    let pledgeMonthsAgo = 99;
+    if (dm) {
+      const d = new Date(`${dm[3]}-${dm[2]}-${dm[1]}T00:00:00Z`);
+      pledgeMonthsAgo = (Date.now() - d.getTime()) / (30 * 24 * 3600 * 1000);
+    }
+    // Evidence is the pledge fact ALONE (fuzzy → R-08 ×0.7); entity age is a gating condition, not
+    // evidence of the pledge — including the exact F-REG-02 fact would suppress the fuzzy damping.
+    if (pledgeMonthsAgo <= 12 && entityAge <= 2) {
+      out.push(mkSignal("SN-06", "strong", "-", [plg.fact_id], `Fresh asset pledge on a ${entityAge}-year-old entity — core assets encumbered early. ${plg.value}`));
     }
   }
 
@@ -162,14 +190,18 @@ function buildNarrative(signals: Signal[], facts: Fact[], verified: number, sour
   // context, not a risk weight), so without this they would sit only in the collapsed facts list.
   const owners = facts.find((fct) => fct.catalog_id === "F-REG-07");
   if (owners) lines.push({ text: owners.value, evidence: [owners.fact_id] });
+  // Surface pledges as context when they did not trip SN-06 (mature-entity working-capital pledges
+  // are neutral per R-05, but still worth showing) — otherwise they'd sit only in the facts list.
+  const pledge = facts.find((fct) => fct.catalog_id === "F-PLG-01");
+  if (pledge && !signals.some((s) => s.id === "SN-06")) lines.push({ text: pledge.value, evidence: [pledge.fact_id] });
   lines.push({
-    text: `Live check covered ${verified} of 10 domains (${sourcesText}). Enforcement, procurement, auction and pledge are not wired yet — treat this as a partial read.`,
+    text: `Live check covered ${verified} of 10 domains (${sourcesText}). Enforcement and auction are not wired yet — treat this as a partial read.`,
     evidence: [],
   });
   return lines;
 }
 
-const DOMAIN_LABEL: Record<string, string> = { tax: "tax", registry: "registry", web: "web/domain", contact: "contact", notice: "notices", court: "courts" };
+const DOMAIN_LABEL: Record<string, string> = { tax: "tax", registry: "registry", web: "web/domain", contact: "contact", notice: "notices", court: "courts", pledge: "pledges", procurement: "procurement" };
 
 async function runCheck(input: Record<string, string>): Promise<Fixture> {
   const subject: Subject = {
@@ -216,7 +248,7 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
   const name = input.entity_name || input.website || input.tin || "Counterparty";
   // A non-blocking "possible" sanctions match surfaces as a review gap (the strong match already
   // vetoed via B-05 in deriveSignals; this is the soft path that must NOT block).
-  const missing = [{ gap: "Enforcement, procurement, auction and pledge not checked live", cta: "Manual check recommended", mock: false }];
+  const missing = [{ gap: "Enforcement and auction not checked live", cta: "Manual check recommended", mock: false }];
   if (facts.some((ff) => ff.catalog_id === "F-SAN-01" && /Possible OFAC match/i.test(ff.value)))
     missing.unshift({ gap: "Possible sanctions name match (unconfirmed)", cta: "Verify the counterparty name against the OFAC SDN list manually", mock: false });
   const fixture = {

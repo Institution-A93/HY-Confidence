@@ -13,9 +13,9 @@ Technical companion to `scoring-model-spec.md`. For every Fact in the catalog: w
 | F-TAX-03 | src.am top-1000 publication | free, anonymous | table/PDF parse |
 | F-CRT-01…04 | datalex.am | free, anonymous | headless browser, session-bound |
 | F-ENF-01 | harkadir.am (DAHK) | free, anonymous | HTML scrape [R] |
-| F-PLG-01 | secured-rights register (e-register umbrella) | [R] — access tier unconfirmed | scrape [R] |
+| F-PLG-01 | registration.am (movable-property secured-rights register) | PUBLIC, no login/captcha | ✅ BUILT — plain-HTTP BARL POST |
 | F-NTC-01 | azdarar.am | free, anonymous | HTML scrape + keyword monitor |
-| F-PRC-01 | armeps.am / gnumner.am | free, anonymous | HTML scrape [R] |
+| F-PRC-01 | armeps.am (PPCM public JSON API) | free, anonymous | ✅ BUILT — JSON API (gnumner dropped) |
 | F-AUC-01 | ajurd.am (compulsory auctions) | free, anonymous | HTML scrape [R] |
 | F-WEB-01/02 | AMNIC WHOIS, Wayback, live fetch | free | WHOIS query + CDX API + fetch |
 | F-WEB-03/04 | Spyur, FB, search engines | free | scrape + agentic search |
@@ -99,13 +99,15 @@ Armenia publishes BO declarations in Beneficial Ownership Data Standard (BODS) J
 
 **Parsing.** Notice page → type, entity name, TIN (usually present in the text), publication date. Regex over templated Armenian boilerplate works; classify into the four flag-relevant types (liquidation / creditor call / reorganization / capital reduction) by title keywords.
 
-## 7. armeps.am / gnumner.am — State Procurement
+## 7. armeps.am — State Procurement — ✅ BUILT & LIVE (recon 2026-06-23)
 
-**What we get:** F-PRC-01 — contract awards by supplier (SP-03's evidence).
+**What we get:** F-PRC-01 — contract awards by supplier (SP-03's evidence). Adapter: `src/adapters/procurement.ts`.
 
-**Pages.** The procurement system lives across `armeps.am` (e-procurement platform) and `gnumner.am` (announcements/contract info of the authorized body). Award notices list winning supplier + amount. **[R]**: which of the two exposes a supplier-name search vs. requiring iteration over award announcements; gnumner historically publishes machine-listable announcement pages.
+**Transport (the win).** armeps PPCM exposes a PUBLIC JSON API under `https://armeps.am/ppcm/public/…` — no captcha, no Cloudflare, valid TLS — that IS supplier-queryable, so the "iterate award announcements into a local index" fallback is RETIRED. Two POSTs (`Content-Type: application/json`):
+- `/autocomplete/get-supplier-list` `{value:<name>}` → `[{id, taxpayerId, name, …}]`. The `id` is a UUID (NOT the TIN); the contracts filter takes the id. So we autocomplete by NAME, then CONFIRM the match by `taxpayerId === subject.tin` (→ `match: exact`; name-only → `fuzzy`).
+- `/contracts/count` + `/contracts/list` `{filter, order, page}` → rows with `dateSigned` (epoch ms), `contractValue`, `supplierName/supplierTaxpayerId`, `tenderTitle(En)`, `authorityName(En/Hy)` (buyer — already in the row), `number`.
 
-**Parsing.** Award records → buyer, subject, supplier name/TIN, amount, date. If no supplier search exists, build a local index: periodically ingest award announcements and query locally — same pattern as the BODS fallback.
+**Gotchas (verified live, encoded in the adapter):** `list` 500s unless the filter carries ALL keys (count is lenient); the `order.field` is SNAKE_CASE (`date_signed`, not `dateSigned`); the `dateSigned` RANGE filter has an undocumented, 500-prone format, so the SP-03 "≤36 months" window is applied IN CODE against each row's `dateSigned`. **gnumner is dropped** — it only serves aggregate stats, no supplier search.
 
 ## 8. ajurd.am — Compulsory Auctions
 
@@ -162,8 +164,8 @@ Every adapter depends on this layer:
 - [ ] src.am: capture search request (viewstate?), locate current top-1000 publication
 - [ ] Datalex: session/deep-link behavior, result-grid selectors, build the claim-amount regex library from ~30 sample verdicts
 - [ ] harkadir.am: locate proceedings search, capture params
-- [ ] Pledge register: determine public access tier; if gated to banks/notaries, move F-PLG-01/SN-06/R-05 to deferred and adjust coverage denominator to 9
-- [ ] gnumner/armeps: find supplier-searchable surface or set up award-announcement ingest
+- [x] Pledge register: **PUBLIC** — canonical register is `registration.am` (NOT under the e-register umbrella), name+regnumber-searchable, debtor-attributable, plain-HTTP BARL POST. F-PLG-01/SN-06/R-05 stay live; coverage denominator stays 10. ✅ BUILT (`src/adapters/pledge.ts`)
+- [x] gnumner/armeps: **armeps PPCM public JSON API** is supplier-searchable (no local-index ingest needed); gnumner dropped (aggregate stats only). ✅ BUILT (`src/adapters/procurement.ts`)
 - [ ] ajurd.am: lot listing structure, debtor field
 - [ ] Derive/confirm TIN check-digit algorithm from known-valid TINs
 - [ ] Transliteration variant generator: test against 50 real company names across all three scripts

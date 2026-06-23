@@ -7,6 +7,8 @@ import { mxAdapter } from "../src/adapters/mx.ts";
 import { sanctionsAdapter } from "../src/adapters/sanctions.ts";
 import { datalexAdapter } from "../src/adapters/datalex.ts";
 import { eregisterAdapter } from "../src/adapters/eregister.ts";
+import { pledgeAdapter } from "../src/adapters/pledge.ts";
+import { procurementAdapter } from "../src/adapters/procurement.ts";
 import type { Subject } from "../src/lib/adapter.ts";
 
 const now = () => new Date().toISOString();
@@ -41,6 +43,14 @@ await run("Datalex — Թոփ Ավտո ՍՊԸ (expect bankruptcy F-CRT-03 → B-
 // e-register: TIN-keyed. Grand Candy → expect beneficial owners (the Vardanyan brothers, 50/50).
 await run("e-register — Grand Candy TIN 02226764 (expect F-REG-07 owners)", () =>
   eregisterAdapter.fetch({ tin: "02226764" }, now()),
+);
+// Pledge: name-keyed. Spayka (Սպայկա) carries many movable-property pledges (expect F-PLG-01).
+await run("Pledge — Սպայկա (expect F-PLG-01 pledges)", () =>
+  pledgeAdapter.fetch({ name: "Սպայկա" }, now()),
+);
+// Procurement: name-keyed, TIN confirms the supplier. Regard Travel has recent state contracts.
+await run("Procurement — Regard Travel TIN 02252505 (expect F-PRC-01 win, exact)", () =>
+  procurementAdapter.fetch({ name: "Regard Travel", tin: "02252505" }, now()),
 );
 
 console.log("\nsmoke done.");
