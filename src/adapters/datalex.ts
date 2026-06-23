@@ -192,10 +192,13 @@ export const datalexAdapter: SourceAdapter = {
         gridSearchByName(cookie, "defendant", name, BANKRUPTCY, false), // strict: B-01 must not false-block on a namesake
         gridSearchByName(cookie, "defendant", name, PAYMENT),
       ]);
-      // Court is matched by NAME (datalex has no TIN field); when the subject was TIN-resolved the
-      // canonical name is authoritative, so we mirror azdarar's exact/fuzzy convention. Name
-      // collisions remain possible → noted for the user; B-01 is gated on the debtor role + recency.
-      const match = subject.tin ? "exact" : "fuzzy";
+      // Court facts are ALWAYS name-matched: datalex has no TIN field, so even a TIN-resolved subject's
+      // cases are found by name and can include a same-name entity (e.g. an active and a liquidated
+      // «ԱՊԱՎԵՆ» share one case set). So we mark court "fuzzy" regardless of subject.tin → R-08 damps the
+      // scored court signals (SN-01/WP-09) ×0.7, reflecting that the data may not be this exact TIN.
+      // This is a stopgap until the affiliation graph (e-register login) can disambiguate by owner;
+      // B-01 stays a veto (blockers aren't damped) but is gated on the debtor role + recency.
+      const match = "fuzzy" as const;
       const facts = [];
       // F-CRT-02 folds civil-defendant + payment-order debt exposure into one fact; payment orders
       // are the clean "owes money" half (deriveSignals prefers them for SN-01).
