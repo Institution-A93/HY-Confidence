@@ -64,13 +64,15 @@ The landing-page 200s were misleading; the real content paths have protection:
   has none → blocked):** executive director (F-REG-05), founder/participant list + capital
   (F-REG-03/06), change history (F-REG-08), and PERSON search → so the cross-entity affiliation graph
   (F-GRA, phoenix B-06) is NOT public.
-- **cesa.am — ⛔ BLOCKED (likely).** Cloudflare + CodeIgniter; CSP references **reCAPTCHA**, so the
-  proceedings search is probably captcha-gated. Needs a captcha-solving service or headless. Content
-  is reachable at `/en/` but the search itself is the wall.
+- **cesa.am — ✅ NOT a blocker after all (re-recon 2026-06-23).** The Cloudflare + reCAPTCHA (CSP
+  references recaptcha.net) gate only the cesa.am *contact/appeal forms*. The enforcement DEBTOR
+  SEARCH is not on cesa.am at all — `cesa.am/hy/service/hetakhuzumner` redirects to the separate,
+  captcha-free `cabinet.harkadir.am` (built — see the enforcement section below).
 
-**To unblock e-register + cesa.am later:** a Playwright headless pool on the droplet (+ a captcha
-solver like 2captcha for src.am-style image codes and cesa reCAPTCHA, and/or an Armenian residential
-proxy for Radware). That is a deliberate cost/infra step — not plain HTTP.
+**To unblock the remaining gated tiers later:** a Playwright headless pool on the droplet (+ a captcha
+solver like 2captcha/CapSolver for src.am-style image codes, and/or an Armenian residential proxy for
+Radware) — relevant for the **datalex case-detail captcha** (claim amounts/outcomes) and the
+e-register login tier, NOT for enforcement (which turned out to be plain HTTP).
 
 ### The "open" sources — captcha-free but no quick win (recon 2026-06-19)
 
@@ -97,8 +99,10 @@ needs a dedicated build (a src.am-style grind), not a one-shot scrape:
   (the legal-form suffix in almost every company name) returns **0 lots**; 5 sampled lot pages across
   categories show no `Պարտապան`/legal-form/TIN. So you cannot ask "is THIS counterparty's asset on
   auction?" by name. The only lot→debtor join lives in the enforcement proceeding (cesa.am/DAHK), which
-  is Cloudflare+reCAPTCHA-walled. **Therefore SN-05 is unlocked together with cesa.am** (same paid
-  headless+captcha step as e-register) — not before. Building a name-keyed ajurd adapter now would return
+  is the enforcement proceeding. **UPDATE (2026-06-23): enforcement is now BUILT (cabinet.harkadir.am
+  DebtorRems), but keyed debtor→proceedings, NOT lot→debtor — so it can't hand ajurd the debtor a lot
+  needs. SN-05 stays deferred on the DATA-MODEL gap (lots are anonymous), now DECOUPLED from the captcha
+  question (resolved — enforcement was plain HTTP).** Building a name-keyed ajurd adapter now would return
   empty for every real query and mislabel it "auction: queried, none found" (verified_empty), violating
   the R-09 "could-not-query ≠ queried-empty" invariant — so it was deliberately NOT built.
   (`eauction.am` is unrelated — it's "LOT BORSA", a private commodity exchange; voluntary, also no debtor names.)
@@ -183,11 +187,21 @@ the "hardest, headless" assumption with a plain JSON API.
   descriptor words (ԳՐՈՒՊ); token-containment guard. Follow-ups: person/sole-proprietor party search
   (first+last name fields); claim-amount parsing if/when the detail captcha is solved.
 
-## harkadir.am — DAHK / compulsory enforcement (enforcement) · Epic D1
-Facts: F-ENF-01 open proceedings — strongest free "won't pay" signal (→ blocker B-03).
-- 🔎 Locate the proceedings-search section (site restructured ≥ once) — path + params.
-- ⚠ Only **open** proceedings are exposed; closed history is not retrievable (why SN-02 was culled).
-- 🔎 Match by TIN where the form allows, else Armenian name + fuzzy post-filter.
+## cabinet.harkadir.am — DAHK / compulsory enforcement (enforcement) · Epic D1 — ✅ BUILT & LIVE (recon 2026-06-23)
+Facts: F-ENF-01 open proceedings — strongest free "won't pay" signal (→ blocker B-03). Adapter:
+`src/adapters/enforcement.ts`. TIN-keyed → `match: exact`.
+- ✅ **The "Cloudflare + reCAPTCHA" wall was a false alarm** — it's on the cesa.am *contact forms*,
+  not the debtor search. `cesa.am/hy/service/hetakhuzumner` → **`cabinet.harkadir.am/dahkcabinet/
+  cabinet/debtorinfo/`**, a Microsoft-IIS / ASP.NET Core app, NO Cloudflare, NO real captcha, valid
+  TLS. Plain HTTP like src.am — no headless, no solver, no proxy.
+- **Flow (verified):** GET page → `__RequestVerificationToken` + `.AspNetCore.Antiforgery` cookie →
+  GET `/DahkCabinet/Cabinet/RequestCaptcha` (a plain 32-char text NONCE the client echoes back, not a
+  visual captcha; each search response returns the next nonce) → POST `/DahkCabinet/Cabinet/DebtorRems`
+  `{PASSPORTORHVHH:<TIN>, CAPTCHA:<nonce>}` → `{CAPTCHA:<next>, REMS:[…]}`. Only OPEN proceedings are
+  published, so any REMS row → B-03. (`/SSnPassportDebtorWantedList` is login-gated 401 — unused.)
+- ⚠ v1 scores the REMS COUNT (load-bearing); per-proceeding fields (number/amount/date/officer) are a
+  narrative enrichment **[R]** — no debtor-with-proceedings TIN captured during recon (src.am resolver
+  was down); confirm the REMS object shape on the first real debtor. Verified: Grand Candy → REMS:[].
 
 ## azdarar.am — Official public notifications (notice) · Epic D2
 Facts: F-NTC-01 liquidation / creditor-call / reorg / capital-reduction (→ B-02, SN-04).

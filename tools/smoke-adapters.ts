@@ -9,6 +9,7 @@ import { datalexAdapter } from "../src/adapters/datalex.ts";
 import { eregisterAdapter } from "../src/adapters/eregister.ts";
 import { pledgeAdapter } from "../src/adapters/pledge.ts";
 import { procurementAdapter } from "../src/adapters/procurement.ts";
+import { enforcementAdapter } from "../src/adapters/enforcement.ts";
 import type { Subject } from "../src/lib/adapter.ts";
 
 const now = () => new Date().toISOString();
@@ -51,6 +52,11 @@ await run("Pledge — Սպայկա (expect F-PLG-01 pledges)", () =>
 // Procurement: name-keyed, TIN confirms the supplier. Regard Travel has recent state contracts.
 await run("Procurement — Regard Travel TIN 02252505 (expect F-PRC-01 win, exact)", () =>
   procurementAdapter.fetch({ name: "Regard Travel", tin: "02252505" }, now()),
+);
+// Enforcement: TIN-keyed (DAHK debtor search). Grand Candy is clean → verified_empty proves the
+// token/captcha/POST pipe. Swap in a known debtor's TIN to see F-ENF-01 + the REMS structure.
+await run("Enforcement — Grand Candy TIN 02226764 (expect clean / verified_empty)", () =>
+  enforcementAdapter.fetch({ tin: "02226764" }, now()),
 );
 
 console.log("\nsmoke done.");

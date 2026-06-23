@@ -16,6 +16,7 @@ import { datalexAdapter } from "../src/adapters/datalex";
 import { eregisterAdapter } from "../src/adapters/eregister";
 import { pledgeAdapter } from "../src/adapters/pledge";
 import { procurementAdapter } from "../src/adapters/procurement";
+import { enforcementAdapter } from "../src/adapters/enforcement";
 import { resilientFetch, TtlCache, CircuitBreaker } from "../src/lib/fetcher";
 import { COVERAGE_DOMAINS } from "../src/lib/adapter";
 import { stripLegal } from "../src/lib/normalize";
@@ -31,7 +32,7 @@ const breaker = new CircuitBreaker();
 // Keyed adapters run with the raw subject (TIN / email / website / person). e-register is
 // TIN-keyed (beneficial owners by the confirmed TIN) — it enriches the registry domain src.am
 // already covers, so it adds owner Facts without changing the coverage count.
-const KEYED_ADAPTERS = [sanctionsAdapter, whoisAdapter, mxAdapter, eregisterAdapter];
+const KEYED_ADAPTERS = [sanctionsAdapter, whoisAdapter, mxAdapter, eregisterAdapter, enforcementAdapter];
 // Name-keyed adapters need the CANONICAL Armenian name, so they run after src.am resolves it.
 // (procurement also reads the resolved TIN to CONFIRM the supplier match — see nameSubject below.)
 const NAME_KEYED_ADAPTERS = [azdararAdapter, datalexAdapter, pledgeAdapter, procurementAdapter];
@@ -98,6 +99,11 @@ function deriveSignals(facts: Fact[]): Signal[] {
       out.push(mkSignal("SN-04", "strong", "-", [notice.fact_id], "Creditor-call notice published."));
     }
   }
+
+  // Enforcement (DAHK). Only OPEN proceedings are published, so the fact's mere presence = active
+  // compulsory enforcement against this TIN → B-03 veto (the strongest free "won't pay" signal).
+  const enf = f("F-ENF-01");
+  if (enf) out.push(mkSignal("B-03", "blocker", "-", [enf.fact_id], `Open compulsory-enforcement proceedings at DAHK — ${enf.value}.`));
 
   // Procurement (armeps): F-PRC-01 only carries wins already filtered to the ≤36mo SP-03 window
   // (the adapter applies it), so its presence IS the signal — a positive credibility marker.
@@ -195,13 +201,13 @@ function buildNarrative(signals: Signal[], facts: Fact[], verified: number, sour
   const pledge = facts.find((fct) => fct.catalog_id === "F-PLG-01");
   if (pledge && !signals.some((s) => s.id === "SN-06")) lines.push({ text: pledge.value, evidence: [pledge.fact_id] });
   lines.push({
-    text: `Live check covered ${verified} of 10 domains (${sourcesText}). Enforcement and auction are not wired yet — treat this as a partial read.`,
+    text: `Live check covered ${verified} of 10 domains (${sourcesText}). Auction is not wired yet — treat this as a partial read.`,
     evidence: [],
   });
   return lines;
 }
 
-const DOMAIN_LABEL: Record<string, string> = { tax: "tax", registry: "registry", web: "web/domain", contact: "contact", notice: "notices", court: "courts", pledge: "pledges", procurement: "procurement" };
+const DOMAIN_LABEL: Record<string, string> = { tax: "tax", registry: "registry", web: "web/domain", contact: "contact", notice: "notices", court: "courts", pledge: "pledges", procurement: "procurement", enforcement: "enforcement" };
 
 async function runCheck(input: Record<string, string>): Promise<Fixture> {
   const subject: Subject = {
@@ -248,7 +254,7 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
   const name = input.entity_name || input.website || input.tin || "Counterparty";
   // A non-blocking "possible" sanctions match surfaces as a review gap (the strong match already
   // vetoed via B-05 in deriveSignals; this is the soft path that must NOT block).
-  const missing = [{ gap: "Enforcement and auction not checked live", cta: "Manual check recommended", mock: false }];
+  const missing = [{ gap: "Auction not checked live", cta: "Manual check recommended", mock: false }];
   if (facts.some((ff) => ff.catalog_id === "F-SAN-01" && /Possible OFAC match/i.test(ff.value)))
     missing.unshift({ gap: "Possible sanctions name match (unconfirmed)", cta: "Verify the counterparty name against the OFAC SDN list manually", mock: false });
   const fixture = {

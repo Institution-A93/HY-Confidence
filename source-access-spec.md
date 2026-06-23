@@ -12,7 +12,7 @@ Technical companion to `scoring-model-spec.md`. For every Fact in the catalog: w
 | F-TAX-01/02 | src.am taxpayer search | free, anonymous | HTML scrape |
 | F-TAX-03 | src.am top-1000 publication | free, anonymous | table/PDF parse |
 | F-CRT-01…04 | datalex.am | free, anonymous | headless browser, session-bound |
-| F-ENF-01 | harkadir.am (DAHK) | free, anonymous | HTML scrape [R] |
+| F-ENF-01 | cabinet.harkadir.am (DAHK debtor search) | PUBLIC, no captcha | ✅ BUILT — plain-HTTP, TIN-keyed |
 | F-PLG-01 | registration.am (movable-property secured-rights register) | PUBLIC, no login/captcha | ✅ BUILT — plain-HTTP BARL POST |
 | F-NTC-01 | azdarar.am | free, anonymous | HTML scrape + keyword monitor |
 | F-PRC-01 | armeps.am (PPCM public JSON API) | free, anonymous | ✅ BUILT — JSON API (gnumner dropped) |
@@ -81,13 +81,15 @@ Armenia publishes BO declarations in Beneficial Ownership Data Standard (BODS) J
 
 **Politeness.** This is the slowest, most fragile source. Cache aggressively (12–24h), throttle to human-ish rates, run checks asynchronously.
 
-## 5. harkadir.am — DAHK (Compulsory Enforcement Service)
+## 5. cabinet.harkadir.am — DAHK (Compulsory Enforcement Service) — ✅ BUILT & LIVE (recon 2026-06-23)
 
-**What we get:** F-ENF-01 open enforcement proceedings — the strongest free "won't pay" signal.
+**What we get:** F-ENF-01 open enforcement proceedings — the strongest free "won't pay" signal (→ B-03). Adapter: `src/adapters/enforcement.ts`. TIN-keyed → `match: exact` (no R-08 damping).
 
-**Pages.** `harkadir.am` is the official CES site (linked from MoJ as "Judicial Acts Compulsory Enforcement Service"). It hosts a public search of enforcement proceedings by debtor name/TIN **[R: exact search path and params — the site has been restructured at least once; locate the proceedings-search section during recon]**. Only **open/active** proceedings are reliably exposed; closed-history is not retrievable (which is why SN-02 was culled).
+**The captcha scare was misplaced.** The "Cloudflare + reCAPTCHA" wall is on the cesa.am *contact forms*, NOT the debtor search. `cesa.am/hy/service/hetakhuzumner` redirects to **`cabinet.harkadir.am/dahkcabinet/cabinet/debtorinfo/`** — a Microsoft-IIS / ASP.NET Core app, NO Cloudflare, NO real captcha. So this is plain HTTP (like src.am): no headless, no solver, no proxy.
 
-**Parsing.** Result rows → proceeding number, debtor, claim amount, opening date, enforcement officer/region. Server-rendered, simple extraction expected. Match by TIN where the form allows; otherwise Armenian name + fuzzy post-filter.
+**Transport (3 round-trips, verified live):** (1) GET the page → antiforgery token (`__RequestVerificationToken`) + `.AspNetCore.Antiforgery` cookie; (2) GET `/DahkCabinet/Cabinet/RequestCaptcha` (token header + cookie) → a plain 32-char text nonce — NOT a visual challenge; the client just echoes it, and each search response returns the next nonce (anti-replay, not human verification); (3) POST `/DahkCabinet/Cabinet/DebtorRems` `{PASSPORTORHVHH:<TIN>, CAPTCHA:<nonce>}` → `{CAPTCHA:<next>, REMS:[…]}`. Only **open** proceedings are published (closed history isn't retrievable — why SN-02 was culled), so any REMS row = an open proceeding → B-03.
+
+**Parsing.** v1 reports the proceeding COUNT (the load-bearing B-03 signal). Per-proceeding fields (number / claim amount / opening date / enforcement officer) are a narrative enrichment **[R]** — the src.am resolver was down during recon so no debtor-with-proceedings TIN could be captured; confirm the REMS object shape on the first real debtor. (The sibling `/SSnPassportDebtorWantedList` is login-gated (401) — unused.)
 
 ## 6. azdarar.am — Official Public Notifications
 
@@ -163,7 +165,7 @@ Every adapter depends on this layer:
 - [ ] BODS: locate the register's own bulk export; compare freshness vs bods-data.openownership.org
 - [ ] src.am: capture search request (viewstate?), locate current top-1000 publication
 - [ ] Datalex: session/deep-link behavior, result-grid selectors, build the claim-amount regex library from ~30 sample verdicts
-- [ ] harkadir.am: locate proceedings search, capture params
+- [x] harkadir.am: **DONE** — debtor search is at `cabinet.harkadir.am/.../DebtorRems` (plain HTTP, TIN-keyed, no captcha); the cesa.am captcha wall is only on contact forms. ✅ BUILT (`src/adapters/enforcement.ts`)
 - [x] Pledge register: **PUBLIC** — canonical register is `registration.am` (NOT under the e-register umbrella), name+regnumber-searchable, debtor-attributable, plain-HTTP BARL POST. F-PLG-01/SN-06/R-05 stay live; coverage denominator stays 10. ✅ BUILT (`src/adapters/pledge.ts`)
 - [x] gnumner/armeps: **armeps PPCM public JSON API** is supplier-searchable (no local-index ingest needed); gnumner dropped (aggregate stats only). ✅ BUILT (`src/adapters/procurement.ts`)
 - [ ] ajurd.am: lot listing structure, debtor field
