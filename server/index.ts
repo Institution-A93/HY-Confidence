@@ -104,6 +104,9 @@ function deriveSignals(facts: Fact[]): Signal[] {
   // R-06 court recency decay: ×1.0 ≤12mo, ×0.6 ≤24mo, ×0.3 ≤36mo, 0 beyond. Unknown year → mid.
   const decay = (yr: number | null) => (yr === null ? 0.6 : nowYear - yr <= 1 ? 1 : nowYear - yr <= 2 ? 0.6 : nowYear - yr <= 3 ? 0.3 : 0);
   const yearIn = (v: string) => Number((v.match(/most recent (\d{4})/) || [])[1]) || null;
+  // Court data is matched by NAME (datalex has no TIN), so flag every court signal — the user must
+  // see these may be a same-name entity (cf. the always-fuzzy / R-08 damping + guard in datalex.ts).
+  const NAME_MATCHED = " (matched by name, not TIN — may be a same-name entity)";
 
   const def = f("F-CRT-02");
   const pla = f("F-CRT-01");
@@ -112,7 +115,7 @@ function deriveSignals(facts: Fact[]): Signal[] {
   const plaCount = pla ? Number((pla.value.match(/Plaintiff in (\d+)/) || [])[1] || 0) : 0;
 
   if (pla) {
-    out.push(mkSignal("WP-09", "weak", "+", [pla.fact_id], `Plaintiff in ${plaCount} collection case(s)${civilDef ? ` (vs ${civilDef} as defendant)` : ""} — actively enforces its own receivables.`));
+    out.push(mkSignal("WP-09", "weak", "+", [pla.fact_id], `Plaintiff in ${plaCount} collection case(s)${civilDef ? ` (vs ${civilDef} as defendant)` : ""} — actively enforces its own receivables.` + NAME_MATCHED));
   }
   if (def) {
     const yr = yearIn(def.value);
@@ -130,9 +133,9 @@ function deriveSignals(facts: Fact[]): Signal[] {
       const desc = payDef > 0
         ? `Net debt/litigation target: ${civilDef} civil + ${payDef} payment-order case(s) vs ${plaCount} as plaintiff`
         : `Net litigation target: ${civilDef} case(s) as defendant vs ${plaCount} as plaintiff`;
-      out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `${desc}${yr ? `, most recent ${yr}` : ""}.`, base));
+      out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `${desc}${yr ? `, most recent ${yr}` : ""}.` + NAME_MATCHED, base));
     } else if (net >= 1 && target === 1) {
-      out.push(mkSignal("WN-07", "weak", "-", [def.fact_id], "A single, dated defendant case (>24 months old)."));
+      out.push(mkSignal("WN-07", "weak", "-", [def.fact_id], "A single, dated defendant case (>24 months old)." + NAME_MATCHED));
     }
   }
 
@@ -144,7 +147,7 @@ function deriveSignals(facts: Fact[]): Signal[] {
     // are NOT blocked — they could be discharged, which we cannot confirm behind the detail
     // captcha — so a stale bankruptcy stays visible as the F-CRT-03 fact without vetoing the score.
     if (yr !== null && nowYear - yr <= 4) {
-      out.push(mkSignal("B-01", "blocker", "-", [bkr.fact_id], `Appears as the debtor in a bankruptcy case (filed ${yr}) — open insolvency proceedings.`));
+      out.push(mkSignal("B-01", "blocker", "-", [bkr.fact_id], `Appears as the debtor in a bankruptcy case (filed ${yr}) — open insolvency proceedings.` + NAME_MATCHED));
     }
   }
   return out;
