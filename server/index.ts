@@ -107,27 +107,33 @@ function deriveSignals(facts: Fact[]): Signal[] {
 
   const def = f("F-CRT-02");
   const pla = f("F-CRT-01");
-  const defCount = def ? Number((def.value.match(/Defendant in (\d+)/) || [])[1] || 0) : 0;
+  const civilDef = def ? Number((def.value.match(/(\d+) civil case/) || [])[1] || 0) : 0;
+  const payDef = def ? Number((def.value.match(/(\d+) payment-order/) || [])[1] || 0) : 0;
   const plaCount = pla ? Number((pla.value.match(/Plaintiff in (\d+)/) || [])[1] || 0) : 0;
 
   if (pla) {
-    out.push(mkSignal("WP-09", "weak", "+", [pla.fact_id], `Plaintiff in ${plaCount} collection case(s)${defCount ? ` (vs ${defCount} as defendant)` : ""} — actively enforces its own receivables.`));
+    out.push(mkSignal("WP-09", "weak", "+", [pla.fact_id], `Plaintiff in ${plaCount} collection case(s)${civilDef ? ` (vs ${civilDef} as defendant)` : ""} — actively enforces its own receivables.`));
   }
   if (def) {
     const yr = yearIn(def.value);
     const d = decay(yr);
-    // SN-01 should reflect debt/contract cases where the entity is the TARGET. Case TYPE and
-    // AMOUNT live behind the detail captcha, so v1 uses the NET defendant excess as the proxy: a
-    // company that sues at least as often as it is sued is enforcing its receivables (spec R-04's
-    // stated philosophy — "suing deadbeat customers is healthy"), and its raw defendant count just
-    // tracks its size. Only a NET litigation target trips SN-01; magnitude + R-06 recency scale it.
-    // [follow-up: filter to debt/contract + scale by amount once the detail captcha is solved.]
-    const net = defCount - plaCount;
-    if (net >= 1 && d > 0) {
-      const base = (net >= 10 ? -15 : net >= 3 ? -12 : -10) * d;
-      out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `Net litigation target: ${defCount} case(s) as defendant vs ${plaCount} as plaintiff${yr ? `, most recent ${yr}` : ""}.`, base));
-    } else if (net >= 1 && defCount === 1) {
-      out.push(mkSignal("WN-07", "weak", "-", [def.fact_id], "A single, dated defendant case (>24 months old)."));
+    if (payDef > 0 && d > 0) {
+      // Payment orders = a creditor already obtained an enforceable order → unambiguous unpaid debt.
+      // This is the clean SN-01 the spec wants (debt/contract defendant), so it takes precedence over
+      // the broader net-civil proxy below; recency-scaled per R-06.
+      const base = (payDef >= 5 ? -15 : payDef >= 2 ? -12 : -10) * d;
+      out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `Subject of ${payDef} payment-order case(s) — a creditor already holds an enforceable order for unpaid debt${yr ? ` (most recent ${yr})` : ""}.`, base));
+    } else {
+      // No payment orders → fall back to the NET civil-defendant proxy. A company that sues at least
+      // as often as it is sued is enforcing its receivables (spec R-04), not distressed; raw defendant
+      // count just tracks its size. Case type/amount are captcha-gated, hence the proxy.
+      const net = civilDef - plaCount;
+      if (net >= 1 && d > 0) {
+        const base = (net >= 10 ? -15 : net >= 3 ? -12 : -10) * d;
+        out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `Net litigation target: ${civilDef} case(s) as defendant vs ${plaCount} as plaintiff${yr ? `, most recent ${yr}` : ""}.`, base));
+      } else if (net >= 1 && civilDef === 1) {
+        out.push(mkSignal("WN-07", "weak", "-", [def.fact_id], "A single, dated defendant case (>24 months old)."));
+      }
     }
   }
 
@@ -145,11 +151,15 @@ function deriveSignals(facts: Fact[]): Signal[] {
   return out;
 }
 
-function buildNarrative(signals: Signal[], verified: number, sourcesText: string): NarrativeLine[] {
+function buildNarrative(signals: Signal[], facts: Fact[], verified: number, sourcesText: string): NarrativeLine[] {
   const lines: NarrativeLine[] = [];
   const blocker = signals.find((s) => s.grade === "blocker");
   if (blocker) lines.push({ text: "BLOCKED: " + blocker.note, evidence: blocker.evidence });
   for (const s of signals.filter((x) => x.grade !== "blocker")) lines.push({ text: s.note, evidence: s.evidence });
+  // Surface beneficial owners prominently. They carry no scored signal (ownership transparency is
+  // context, not a risk weight), so without this they would sit only in the collapsed facts list.
+  const owners = facts.find((fct) => fct.catalog_id === "F-REG-07");
+  if (owners) lines.push({ text: owners.value, evidence: [owners.fact_id] });
   lines.push({
     text: `Live check covered ${verified} of 10 domains (${sourcesText}). Enforcement, procurement, auction and pledge are not wired yet — treat this as a partial read.`,
     evidence: [],
@@ -228,7 +238,7 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
       coverage,
       tier_map: eng.tier_map,
       band_blur: eng.band_blur,
-      narrative: buildNarrative(eng.signals, coverage.verified, sourcesText),
+      narrative: buildNarrative(eng.signals, facts, coverage.verified, sourcesText),
       missing,
     },
   };

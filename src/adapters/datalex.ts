@@ -34,7 +34,16 @@ const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124.0 Safa
 // matching gridSearchDescription/caseTypeID or it returns the wrong index.
 const CIVIL = { gsd: "datalex_civ_case_info", caseType: "civil", caseTypeID: 2 } as const;
 const BANKRUPTCY = { gsd: "datalex_bankr_case_info", caseType: "bankruptcy", caseTypeID: 3 } as const;
-type CaseConfig = typeof CIVIL | typeof BANKRUPTCY;
+// Payment orders (Վճարման կարգադրություն): a creditor obtained an order against the respondant →
+// an unambiguous "owes money" signal (cleaner than general civil litigation for SN-01).
+const PAYMENT = { gsd: "datalex_paym_case_info", caseType: "payment_order", caseTypeID: 6 } as const;
+type CaseConfig = typeof CIVIL | typeof BANKRUPTCY | typeof PAYMENT;
+
+type Role = "defendant" | "plaintiff";
+const ROLE_FIELD: Record<Role, { name: string; type: string }> = {
+  defendant: { name: "respondant_organization_name", type: "resp_type" },
+  plaintiff: { name: "claimant_organization_name", type: "claimant_type" },
+};
 
 interface Row {
   claimant_name?: string;
@@ -129,6 +138,22 @@ async function gridSearch(cookie: string, filterData: Record<string, string>, cf
   return { totalCount: json.result?.totalCount ?? 0, rows: json.result?.data ?? [] };
 }
 
+// Search one role on one case-type. Datalex PHRASE-matches the party name, so a trailing descriptor
+// word in src.am's canonical name (ԳՐՈՒՊ "Group", ՀՈԼԴԻՆԳ "Holding") over-specifies vs how the
+// courts name the party and returns 0 (e.g. «ԱՐԱՐԱՏ ՑԵՄԵՆՏ ԳՐՈՒՊ» → 0, «ԱՐԱՐԱՏ ՑԵՄԵՆՏ» → 20). So if a
+// ≥3-word name finds nothing, retry once with the last word dropped — the distinctive tokens lead,
+// descriptors trail; staying ≥2 words keeps it specific.
+async function gridSearchByName(cookie: string, role: Role, name: string, cfg: CaseConfig, retry = true): Promise<GridResult> {
+  const { name: nameField, type: typeField } = ROLE_FIELD[role];
+  const run = (n: string) => gridSearch(cookie, { [nameField]: n, [typeField]: "organization" }, cfg);
+  const first = await run(name);
+  const words = name.split(/\s+/).filter(Boolean);
+  // The retry trades precision for recall — fine for the non-blocking civil/payment signals, but the
+  // caller DISABLES it for bankruptcy (retry=false): B-01 is a hard veto, and a broadened name could
+  // match a namesake's old bankruptcy and falsely BLOCK an active company.
+  return retry && first.totalCount === 0 && words.length >= 3 ? run(words.slice(0, -1).join(" ")) : first;
+}
+
 // Most-recent filing year across a page of rows. Armenian case numbers end in the 2-digit year:
 // "ԵԴ/0254/02/26" → 2026, "ՍնԴ/1818/04/26" → 2026. Returns null if none parse (caller then
 // declines the recency-dependent blocker rather than guessing — see B-01 note above).
@@ -157,34 +182,38 @@ export const datalexAdapter: SourceAdapter = {
   async fetch(subject: Subject, now: string): Promise<AdapterResult> {
     const name = (subject.name || "").trim();
     if (!name) return { domain: "court", status: "verified_empty", facts: [], fetched_at: now, source: this.source };
-    // Org-name search (sole-proprietor/person parties are a follow-up — src.am gives us org names).
-    const asDefendant = { respondant_organization_name: name, resp_type: "organization" };
-    const asPlaintiff = { claimant_organization_name: name, claimant_type: "organization" };
     try {
       const cookie = await getSession();
-      // Three independent searches share the one PHP session; getGridDataList is self-contained
-      // (filter lives in arg), so they run in parallel.
-      const [def, pla, bkr] = await Promise.all([
-        gridSearch(cookie, asDefendant, CIVIL),
-        gridSearch(cookie, asPlaintiff, CIVIL),
-        gridSearch(cookie, asDefendant, BANKRUPTCY),
+      // Four independent searches share the one PHP session (getGridDataList is self-contained), so
+      // they run in parallel: defendant + plaintiff (civil), debtor (bankruptcy), debtor (payment order).
+      const [def, pla, bkr, pay] = await Promise.all([
+        gridSearchByName(cookie, "defendant", name, CIVIL),
+        gridSearchByName(cookie, "plaintiff", name, CIVIL),
+        gridSearchByName(cookie, "defendant", name, BANKRUPTCY, false), // strict: B-01 must not false-block on a namesake
+        gridSearchByName(cookie, "defendant", name, PAYMENT),
       ]);
       // Court is matched by NAME (datalex has no TIN field); when the subject was TIN-resolved the
       // canonical name is authoritative, so we mirror azdarar's exact/fuzzy convention. Name
       // collisions remain possible → noted for the user; B-01 is gated on the debtor role + recency.
       const match = subject.tin ? "exact" : "fuzzy";
       const facts = [];
-      if (def.totalCount > 0) {
-        const yr = mostRecentCaseYear(def.rows);
+      // F-CRT-02 folds civil-defendant + payment-order debt exposure into one fact; payment orders
+      // are the clean "owes money" half (deriveSignals prefers them for SN-01).
+      if (def.totalCount > 0 || pay.totalCount > 0) {
+        const rows = def.rows.length ? def.rows : pay.rows;
+        const yr = mostRecentCaseYear([...def.rows, ...pay.rows]);
+        const parts: string[] = [];
+        if (def.totalCount > 0) parts.push(`${def.totalCount} civil case(s)`);
+        if (pay.totalCount > 0) parts.push(`${pay.totalCount} payment-order(s)`);
         facts.push(
           makeFact({
             catalog_id: "F-CRT-02",
             subject: name,
             domain: "court",
             field: "defendant_cases",
-            value: `Defendant in ${def.totalCount} civil case(s)${yr ? `; most recent ${yr}` : ""} (${def.rows[0]?.case_number || "—"})`,
+            value: `Defendant: ${parts.join(", ")}${yr ? `; most recent ${yr}` : ""} (${rows[0]?.case_number || "—"})`,
             source: this.source,
-            url: caseUrl(def.rows[0]),
+            url: caseUrl(rows[0]),
             fetched_at: now,
             match,
           }),
