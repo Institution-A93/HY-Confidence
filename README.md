@@ -68,6 +68,9 @@ per-source recon — those adapters are deliberately not built blind.
 
 ## Deploy
 
-Push to `main` builds and deploys to GitHub Pages via `.github/workflows/deploy.yml`.
-One-time: repo Settings → Pages → Source → **GitHub Actions**. `main` is production — there is
-no dev/staging.
+Push to `main` runs the suite once and, if green, deploys both targets via
+`.github/workflows/deploy.yml`: the **frontend** to GitHub Pages and the **backend** to the
+DigitalOcean droplet over SSH (`git pull` + service restart). `main` is production — there is
+no dev/staging. One-time setup: repo Settings → Pages → Source → **GitHub Actions**, and add the
+droplet SSH private key as the repo secret **`DROPLET_SSH_KEY`** (Settings → Secrets and variables
+→ Actions) so the backend job can deploy.

@@ -1,9 +1,12 @@
-# Build the Vite app and deploy it to GitHub Pages on every push to main.
-# This is what makes "main = production": a merge to main publishes the live site.
-# Pages source must be set to "GitHub Actions" once (Settings → Pages → Source). The
-# workflow token cannot enable Pages itself (org policy), so that toggle is manual.
+# Deploy on every push to main — this is what makes "main = production". Two targets, both
+# gated on the same build (typecheck + tests + build) so a red suite blocks BOTH:
+#   • frontend → GitHub Pages (static site).  Pages source must be set to "GitHub Actions"
+#     once (Settings → Pages → Source); the workflow token cannot enable Pages (org policy).
+#   • backend  → the DigitalOcean droplet (159.65.120.201) over SSH: `git pull` + service
+#     restart. The backend runs the Fact adapters server-side (scraping can't run on Pages),
+#     so a push that only updates Pages would leave the live Facts stale — both must deploy.
 # vite.config base is "./" so assets resolve under the project subpath.
-name: Deploy to GitHub Pages
+name: Deploy (Pages frontend + droplet backend)
 
 on:
   push:
@@ -46,3 +49,22 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # Backend deploy: SSH into the droplet, fast-forward the checkout, restart the systemd service.
+  # Runs in parallel with the Pages deploy (both only need `build`), so a green suite ships both.
+  # The key is passed via env (not ${{ }} interpolation into the script) so the multi-line PEM is
+  # placed verbatim and never expanded by the shell; ssh-keyscan pins the host key (no TOFU prompt).
+  deploy-backend:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to droplet over SSH
+        env:
+          DROPLET_SSH_KEY: ${{ secrets.DROPLET_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DROPLET_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H 159.65.120.201 >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes root@159.65.120.201 \
+            'cd /opt/hy-confidence && git pull -q && systemctl restart hy-confidence && systemctl is-active hy-confidence'

@@ -156,7 +156,10 @@ No trial-and-error on prod. **There is no dev/staging — a push to `main` is a 
 local verification is the only safety net. Run the project's check suite locally BEFORE every push;
 CI/CD deploy is not a debugger. The frontend is Vite + React + TS; the pre-push suite is
 `npm run typecheck` (tsc strict), `npm test` (vitest — engine + lib), and `npm run build`. The
-same three run in CI before the Pages deploy (`.github/workflows/deploy.yml`). eslint / prettier
+same three run in CI before deploy (`.github/workflows/deploy.yml`), which gates BOTH targets on
+that one build: the frontend → GitHub Pages, and the backend → the DigitalOcean droplet over SSH
+(`git pull` + `systemctl restart hy-confidence`, using the `DROPLET_SSH_KEY` repo secret). So a
+push to `main` now deploys both — no manual droplet step. eslint / prettier
 / madge are not wired yet — add them as the codebase grows. The scraping backend (plain HTTP for
 most sources; a Playwright headless pool only for Datalex/postback-style forms per
 `source-access-spec.md` §13) is not built yet; its tooling lands with it. If a check fails, fix it
