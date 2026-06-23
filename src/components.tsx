@@ -93,13 +93,23 @@ export function StatusChip({ status }: { status?: string }) {
   const s = (status || "").toLowerCase();
   let cls = "chip";
   let label = status || "—";
-  if (/active|գործող|активна/.test(s)) {
+  // src.am returns the status in Armenian (Գործող / Լուծարված / Սնանկ …), so each branch matches the
+  // Armenian root as well as English/Russian, AND sets a translated label — otherwise non-active
+  // statuses fell through and rendered the raw Armenian text. Bankrupt is tested before liquidated
+  // (both are "danger"); the active root is the full word գործող, not just գործ, so it does not match
+  // "լուծարման գործընթաց" (liquidation process).
+  if (/active|գործող|активн/.test(s)) {
     cls += " active";
     label = t("st_active");
-  } else if (/liquidat|reorg/.test(s)) {
-    cls += " warn";
-  } else if (/bankrupt|suspend/.test(s)) {
+  } else if (/bankrupt|սնանկ|банкрот/.test(s)) {
     cls += " danger";
+    label = t("st_bankrupt");
+  } else if (/liquidat|լուծ|ликвид/.test(s)) {
+    cls += " danger";
+    label = t("st_liquidated");
+  } else if (/reorg|suspend|վերակազմ|կասեց|реорг|приостан/.test(s)) {
+    cls += " warn";
+    label = t("st_reorg");
   }
   return (
     <span className={cls}>

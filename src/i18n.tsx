@@ -76,6 +76,9 @@ export const I18N: Record<LangCode, Dict> = {
     st_querying: "querying {src}…",
     v_none_found: "none found",
     st_active: "Active",
+    st_liquidated: "Liquidated",
+    st_bankrupt: "Bankrupt",
+    st_reorg: "Reorganization",
 
     dom_registry: "Registry",
     dom_graph: "Affiliations",
@@ -205,6 +208,9 @@ export const I18N: Record<LangCode, Dict> = {
     st_querying: "запрос {src}…",
     v_none_found: "ничего не найдено",
     st_active: "Активна",
+    st_liquidated: "Ликвидирована",
+    st_bankrupt: "Банкрот",
+    st_reorg: "Реорганизация",
 
     dom_registry: "Реестр",
     dom_graph: "Связи",
@@ -334,6 +340,9 @@ export const I18N: Record<LangCode, Dict> = {
     st_querying: "հարցում {src}…",
     v_none_found: "ոչինչ չի գտնվել",
     st_active: "Գործող",
+    st_liquidated: "Լուծարված",
+    st_bankrupt: "Սնանկ",
+    st_reorg: "Վերակազմակերպում",
 
     dom_registry: "Գրանցամատյան",
     dom_graph: "Կապեր",
