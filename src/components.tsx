@@ -1,6 +1,34 @@
 // Shared low-poly components + helpers, ported from the mockup's app1 module.
 import { useT } from "./i18n";
+import type { LangCode } from "./i18n";
 import type { Fixture, Fact, Verdict, TierColor, TierKey } from "./types";
+
+const CHECK_MONTHS: Record<LangCode, string[]> = {
+  en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+  ru: ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"],
+  hy: ["հնվ", "փտվ", "մրտ", "ապր", "մյս", "հնս", "հլս", "օգս", "սեպ", "հոկ", "նոյ", "դեկ"],
+};
+
+// Format an ISO timestamp's OWN wall-clock (read textually, no tz conversion) as
+// "10 Jun 2026, 14:30" — so a fixture authored at +04:00 shows its authored time regardless of
+// where the demo is viewed, and a live UTC stamp shows the server time consistently.
+export function formatChecked(iso: string, lang: LangCode = "en"): string {
+  const m = (iso || "").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return "";
+  const mon = (CHECK_MONTHS[lang] || CHECK_MONTHS.en)[Number(m[2]) - 1];
+  return `${Number(m[3])} ${mon} ${m[1]}, ${m[4]}:${m[5]}`;
+}
+
+// When the check ran: the live backend stamps verdict.checked_at; otherwise derive from the most
+// recent fact (demo fixtures carry their authored fetch times), else now. Replaces the old
+// hardcoded "10 Jun 2026, 14:30" string, which read as a stale date on every live check.
+export function checkedAtOf(fixture: Fixture): string {
+  const stamped = fixture.verdict?.checked_at;
+  if (stamped) return stamped;
+  const fts = (fixture.facts || []).map((f) => f.fetched_at).filter(Boolean);
+  if (fts.length) return fts.reduce((a, b) => (new Date(b) > new Date(a) ? b : a));
+  return new Date().toISOString();
+}
 
 export const COVERAGE_DOMAINS = [
   { key: "registry", label: "Registry", source: "e-register" },

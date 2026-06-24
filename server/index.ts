@@ -279,6 +279,7 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
     rules_fired: eng.rulesFired.map((id) => ({ id, effect: "applied", note: "" })),
     verdict: {
       state: eng.state,
+      checked_at: new Date().toISOString(),
       blockers: eng.blockers,
       score: eng.score,
       coverage,

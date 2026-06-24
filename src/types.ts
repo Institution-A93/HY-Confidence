@@ -78,6 +78,7 @@ export interface SpawnOffer {
 
 export interface Verdict {
   state: VerdictState;
+  checked_at?: string; // ISO; when the check ran. Live backend stamps it; UI falls back to facts.
   blockers?: string[];
   score: number | null;
   coverage: { verified: number; total: number };

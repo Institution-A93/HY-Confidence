@@ -1,9 +1,9 @@
 // Screens S1–S4, ported from the mockup's app2 module. Difference vs the mockup: the
 // Export button is wired to onExport (the mockup shipped it disabled). All shell copy via
 // t(); entity/fixture data stays bilingual.
-import { useState, useEffect, useRef } from "react";
-import { useT } from "./i18n";
-import { EvidenceLinks, StatusChip, TierStrip, TIER_COLOR, domainStates, isEmptyValue } from "./components";
+import { useState, useEffect, useRef, useContext } from "react";
+import { useT, LangContext } from "./i18n";
+import { EvidenceLinks, StatusChip, TierStrip, TIER_COLOR, domainStates, isEmptyValue, checkedAtOf, formatChecked } from "./components";
 import type { CheckInput, Fixture, MissingItem, NarrativeLine, Signal, SpawnOffer, TierKey, Verdict } from "./types";
 
 /* ---------------- S1 — INPUT ---------------- */
@@ -433,6 +433,7 @@ export function VerdictScreen({
   onSwitch: () => void;
 }) {
   const t = useT();
+  const lang = useContext(LangContext);
   const v = fixture.verdict!;
   const sel = fixture.resolution.selected!;
   const [hlSig, setHlSig] = useState<string[] | null>(null);
@@ -470,7 +471,7 @@ export function VerdictScreen({
           <div className="v-masthead-top">
             <span className="eyebrow">{t("s4_dossier")}</span>
             <span className="v-ref mono">
-              {t("k_tin")} {sel.tin} · {t("s4_checked")}
+              {t("k_tin")} {sel.tin} · {t("s4_checked")} {formatChecked(checkedAtOf(fixture), lang)}
             </span>
           </div>
           <div className="v-name hy">{sel.name_hy}</div>

@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { LangContext, useT, LANGS, translate } from "./i18n";
 import type { LangCode } from "./i18n";
 import { FIXTURES } from "./fixtures";
-import { factById } from "./components";
+import { factById, checkedAtOf, formatChecked } from "./components";
 import { BACKEND_URL } from "./config";
 import { InputScreen, ResolveScreen, CheckingScreen, VerdictScreen } from "./screens";
 import type { CheckInput, Candidate, Fixture, MissingItem, SpawnOffer } from "./types";
@@ -108,7 +108,7 @@ function buildMemo(fixture: Fixture): string {
   const sel = fixture.resolution.selected!;
   const L: string[] = [];
   L.push(`# Counterparty Check — ${sel.name_en}`);
-  L.push(`**${sel.name_hy}**  ·  TIN ${sel.tin}  ·  Checked 10 Jun 2026, 14:30`);
+  L.push(`**${sel.name_hy}**  ·  TIN ${sel.tin}  ·  Checked ${formatChecked(checkedAtOf(fixture), "en")}`);
   L.push("");
   L.push(`**Verdict state:** ${v.state}${v.state === "BLOCKED" ? "  ⛔" : ""}`);
   L.push(`**Score:** ${v.score}   ·   **Coverage:** ${v.coverage.verified}/${v.coverage.total} domains`);
@@ -636,8 +636,8 @@ export default function App() {
                 {t("s3_eyebrow")}
               </div>
               <p className="sub">{t("live_checking")}</p>
-              <div className="cp-bar" style={{ marginTop: 20 }}>
-                <span style={{ width: "60%" }}></span>
+              <div className="cp-bar indeterminate" style={{ marginTop: 20 }}>
+                <span></span>
               </div>
             </div>
           )}
