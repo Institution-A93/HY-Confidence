@@ -69,6 +69,9 @@ function applyPerSignalRules(
       rulesFired.add("R-01");
     }
 
+    // Round the base too: a detector's recency decay (R-06, e.g. −12 × 0.6) yields FP noise
+    // (−7.199999999999999) that the UI would render verbatim in the base→effective strikethrough.
+    copy.weight_base = round2(copy.weight_base ?? 0);
     copy.weight_effective = round2(eff);
     return copy;
   });

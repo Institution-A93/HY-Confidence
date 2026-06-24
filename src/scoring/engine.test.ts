@@ -66,6 +66,23 @@ describe("spawn-hrazdan: R-08 fuzzy damping", () => {
   });
 });
 
+describe("weight rounding (no floating-point noise)", () => {
+  // A detector hands the engine a recency-decayed base (R-06: −12 × 0.6 = −7.199999999999999).
+  // Both base and effective must round to 2 dp so the UI never renders the raw FP tail.
+  it("rounds a recency-decayed base and its fuzzy-damped effective to 2 dp", () => {
+    const base = -12 * 0.6; // -7.199999999999999
+    const r = computeVerdict({
+      signals: [{ id: "SN-01", grade: "strong", polarity: "-", weight_base: base, weight_effective: base, evidence: ["F-CRT-02-1"], note: "" }],
+      facts: [{ fact_id: "F-CRT-02-1", catalog_id: "F-CRT-02", subject: "x", domain: "court", field: "defendant_cases", value: "", source: "Datalex", url: "", fetched_at: "t", match: "fuzzy" }],
+      coverage: { verified: 1, total: 10 },
+      fuzzyResolution: false,
+    });
+    const sig = r.signals.find((s) => s.id === "SN-01")!;
+    expect(sig.weight_base).toBe(-7.2);
+    expect(sig.weight_effective).toBe(-5.04); // -7.2 × 0.7 (R-08), rounded
+  });
+});
+
 describe("tier mapping boundaries", () => {
   it("maps representative scores to the spec table", () => {
     expect(tierMapFromScore(30, false)).toEqual({ T1: "green", T2: "green", T3: "green", T4: "yellow" });
