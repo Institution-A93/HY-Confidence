@@ -27,6 +27,7 @@ import { request } from "node:https";
 import type { AdapterResult, SourceAdapter, Subject } from "../lib/adapter";
 import { makeFact } from "../lib/adapter";
 import { stripLegal } from "../lib/normalize";
+import { solveImageToText } from "../lib/capsolver";
 
 const HOST = "datalex.am";
 const SEARCH_PAGE = "/?app=AppCaseSearch";
@@ -135,6 +136,73 @@ function moduleParams(cfg: CaseConfig) {
     hasError: false,
     useScrollToErrorField: true,
   };
+}
+
+// Binary GET (the captcha GIF). Reuses the session cookie that holds the case + captcha state.
+function httpsGetBuffer(path: string, cookie: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const req = request({ host: HOST, path, method: "GET", headers: { "User-Agent": UA, Cookie: cookie } }, (res) => {
+      const ch: Buffer[] = [];
+      res.on("data", (c) => ch.push(c));
+      res.on("end", () => resolve(Buffer.concat(ch)));
+    });
+    req.setTimeout(20000, () => req.destroy(new Error("timeout")));
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+function ajaxPost(cookie: string, params: Record<string, string>): Promise<{ headers: import("node:http").IncomingHttpHeaders; body: string }> {
+  const form = new URLSearchParams(params).toString();
+  return httpsReq(
+    { host: HOST, path: AJAX, method: "POST", headers: { "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", "Content-Length": Buffer.byteLength(form), "X-Requested-With": "XMLHttpRequest", Referer: `https://${HOST}${SEARCH_PAGE}`, Cookie: cookie } },
+    form,
+  );
+}
+
+// Read a bankruptcy case's merits verdict via the captcha-gated detail view (recon 2026-06-24):
+// openCase sets the case in session + returns a captcha → GET the GIF (section_name=userRegKey) →
+// solve (CapSolver) → showCase(ModCaseViewer, [text]) returns the detail HTML → parse the verdict.
+// Best-effort: returns "unknown" without a CAPSOLVER_API_KEY or on ANY error, so the caller keeps the
+// conservative recency-based B-01. One captcha per call; bankruptcies are few per entity. 3 retries
+// (CapSolver isn't 100%). The openCase→showCase shape is non-obvious — see the recon notes.
+async function bankruptcyVerdict(cookie: string, row: Row): Promise<"rejected" | "declared" | "unknown"> {
+  if (!process.env.CAPSOLVER_API_KEY) return "unknown";
+  try {
+    const cd = { ...row, case_type: BANKRUPTCY.caseType, case_type_id: BANKRUPTCY.caseTypeID, search_description: BANKRUPTCY.gsd };
+    const ocBody = (
+      await ajaxPost(cookie, {
+        appName: "AppCaseSearch", appPage: "default", moduleID: "Common/ModGrid", class: "", function: "openCase",
+        name: "Common/ModGrid", type: "modules", dataType: "json", arg: JSON.stringify([cd]), module_params: JSON.stringify(moduleParams(BANKRUPTCY)),
+      })
+    ).body;
+    const oc = JSON.parse(ocBody) as { result?: { html?: string }; module_params?: { ModCaseViewer?: Record<string, unknown> }; module_hierarchy?: { id: string; jsParams?: { captchaUrl?: string } }[] };
+    let html = oc.result?.html || "";
+    if (!/mod-captcha/.test(html)) return parseBankruptcyOutcome(html); // session already unlocked
+    const mcv = oc.module_params?.ModCaseViewer;
+    const captchaUrl = oc.module_hierarchy?.find((mm) => mm.id === "ModCaptcha")?.jsParams?.captchaUrl;
+    if (!mcv || !captchaUrl) return "unknown";
+    const capPath = captchaUrl.replace(/^https?:\/\/[^/]+/, ""); // path+query of file.php?...&section_name=userRegKey
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const gif = await httpsGetBuffer(capPath, cookie);
+      const text = (await solveImageToText(gif.toString("base64"))).trim();
+      html =
+        (
+          JSON.parse(
+            (
+              await ajaxPost(cookie, {
+                appName: "AppCaseSearch", appPage: "default", moduleID: String(mcv.moduleID), class: "", function: "showCase",
+                name: "ModCaseViewer", type: "modules", dataType: "json", arg: JSON.stringify([text]), module_params: JSON.stringify(mcv),
+              })
+            ).body,
+          ) as { result?: { html?: string } }
+        ).result?.html || "";
+      if (!/mod-captcha/.test(html)) return parseBankruptcyOutcome(html);
+    }
+    return "unknown";
+  } catch {
+    return "unknown";
+  }
 }
 
 interface GridResult {
@@ -265,6 +333,28 @@ export function caseUrl(row: Row | undefined): string {
   return row?.case_external_id ? `https://${HOST}/?app=AppCaseSearch&case_id=${row.case_external_id}` : `https://${HOST}${SEARCH_PAGE}`;
 }
 
+// Read the bankruptcy outcome from a (captcha-solved) case-detail page. We parse ONLY the merits
+// VERDICT — the bankruptcy court's «Վ Ճ Ռ Ե Ց» (decided) operative clause — NOT the procedural
+// «ՈՐՈՇԵՑ» rulings (admit-to-proceedings / appeal decisions), which also mention «սնանկ ճանաչ» and
+// would mislead. In a verdict on a "declare bankrupt" petition: «…մերժել» = REJECTED (entity NOT
+// bankrupt → B-01 must not block); otherwise it granted it → DECLARED. "declared" wins if both appear
+// across verdicts (safe — keep the block); we only ACT on "rejected" (un-block). Conservative by
+// design: a false "rejected" would hide a real bankruptcy, so anything unclear stays "unknown".
+export function parseBankruptcyOutcome(detailHtml: string): "rejected" | "declared" | "unknown" {
+  const txt = detailHtml.replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ");
+  const verdict = /[ՎV]\s?Ճ\s?Ռ\s?Ե\s?Ց/g; // «ՎՃՌԵՑ» — the merits verdict only
+  let m: RegExpExecArray | null;
+  let declared = false;
+  let rejected = false;
+  while ((m = verdict.exec(txt))) {
+    const seg = txt.slice(m.index, m.index + 280);
+    if (!/սնանկ\s*ճանաչ/.test(seg)) continue; // a verdict on a declare-bankrupt petition
+    if (/մերժ/.test(seg)) rejected = true;
+    else declared = true;
+  }
+  return declared ? "declared" : rejected ? "rejected" : "unknown";
+}
+
 export const datalexAdapter: SourceAdapter = {
   domain: "court",
   source: "Datalex",
@@ -339,13 +429,17 @@ export const datalexAdapter: SourceAdapter = {
       }
       if (bkr.count > 0) {
         const yr = mostRecentCaseYear(bkr.rows);
+        // Read the newest bankruptcy case's verdict via the captcha-gated detail (CapSolver). A
+        // REJECTED declare-bankrupt petition means the entity is NOT bankrupt → the caller suppresses
+        // B-01 (avoids a false block, e.g. Araratcement). No key / unclear → "unknown" → B-01 as before.
+        const outcome = bkr.rows[0] ? await bankruptcyVerdict(cookie, bkr.rows[0]) : "unknown";
         facts.push(
           makeFact({
             catalog_id: "F-CRT-03",
             subject: name,
             domain: "court",
             field: "bankruptcy_cases",
-            value: `Debtor in ${bkr.count} bankruptcy case(s)${yr ? `; most recent ${yr}` : ""} (${bkr.rows[0]?.case_number || "—"})`,
+            value: `Debtor in ${bkr.count} bankruptcy case(s)${yr ? `; most recent ${yr}` : ""}${outcome !== "unknown" ? `; verdict: ${outcome}` : ""} (${bkr.rows[0]?.case_number || "—"})`,
             source: this.source,
             url: "", // disabled ↗ — see caseUrl note
             fetched_at: now,

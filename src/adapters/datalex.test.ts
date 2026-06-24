@@ -2,7 +2,7 @@
 // by tools/smoke-adapters.ts against the live portal; the deterministic suite tests only the
 // parsing helpers that turn grid rows into the recency signal.
 import { describe, it, expect } from "vitest";
-import { mostRecentCaseYear, caseUrl, nameKey, partyMatchesQuery, parseClaimAmount } from "./datalex";
+import { mostRecentCaseYear, caseUrl, nameKey, partyMatchesQuery, parseClaimAmount, parseBankruptcyOutcome } from "./datalex";
 
 describe("mostRecentCaseYear", () => {
   it("parses the 2-digit year suffix of Armenian case numbers", () => {
@@ -78,6 +78,23 @@ describe("parseClaimAmount (demanded sum from the petitum)", () => {
   it("returns empty when there is no monetary demand (e.g. an executive-writ request)", () => {
     expect(parseClaimAmount("խնդրում ենք տրամադրել կատարողական թերթ")).toBe("");
     expect(parseClaimAmount("")).toBe("");
+  });
+});
+
+describe("parseBankruptcyOutcome (operative verdict only)", () => {
+  it("reads a rejected declare-bankrupt petition from the merits verdict", () => {
+    // real shape: Araratcement — a creditor's petition to bankrupt it was rejected.
+    expect(parseBankruptcyOutcome("Վ Ճ Ռ Ե Ց դիմումը՝ «Արարատցեմենտ» սնանկ ճանաչելու պահանջի մասին, մերժել:")).toBe("rejected");
+  });
+  it("reads a granted (declared bankrupt) verdict", () => {
+    expect(parseBankruptcyOutcome("Վ Ճ Ռ Ե Ց «X» ՍՊԸ-ն սնանկ ճանաչել, կառավարիչ նշանակել:")).toBe("declared");
+  });
+  it("ignores procedural ՈՐՈՇԵՑ rulings (admit-to-proceedings is not a verdict)", () => {
+    expect(parseBankruptcyOutcome("ՈՐՈՇԵՑԻ դիմումն ընդդեմ «X»՝ սնանկ ճանաչելու պահանջի մասին, ընդունել վարույթ:")).toBe("unknown");
+  });
+  it("returns unknown when there is no bankruptcy verdict", () => {
+    expect(parseBankruptcyOutcome("some case text without a verdict")).toBe("unknown");
+    expect(parseBankruptcyOutcome("")).toBe("unknown");
   });
 });
 

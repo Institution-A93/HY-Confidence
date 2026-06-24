@@ -188,11 +188,15 @@ function deriveSignals(facts: Fact[]): Signal[] {
   const bkr = f("F-CRT-03");
   if (bkr) {
     const yr = yearIn(bkr.value);
+    // The captcha-solved detail (datalex.ts) appends "verdict: rejected" when the bankruptcy court
+    // REJECTED the declare-bankrupt petition — the entity is NOT bankrupt (a creditor's petition
+    // failed), so B-01 must not block (e.g. Araratcement). Only an explicit reject suppresses it.
+    const rejected = /verdict:\s*rejected/.test(bkr.value);
     // B-01 needs OPEN bankruptcy. We infer "open" from recency (≤4y): Armenian corporate
     // bankruptcies run multi-year, so a recent filing is almost certainly still live. Older ones
     // are NOT blocked — they could be discharged, which we cannot confirm behind the detail
     // captcha — so a stale bankruptcy stays visible as the F-CRT-03 fact without vetoing the score.
-    if (yr !== null && nowYear - yr <= 4) {
+    if (!rejected && yr !== null && nowYear - yr <= 4) {
       out.push(mkSignal("B-01", "blocker", "-", [bkr.fact_id], `Appears as the debtor in a bankruptcy case (filed ${yr}) — open insolvency proceedings.` + NAME_MATCHED));
     }
   }
