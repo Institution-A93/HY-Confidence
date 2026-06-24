@@ -1,5 +1,7 @@
 // F-ENF-01 — open compulsory-enforcement proceedings at DAHK (the MoJ Compulsory Enforcement
-// Service). The single strongest free "won't pay" signal → blocker B-03. TIN-keyed.
+// Service). A strong "won't pay" signal → strong-negative SN-11, scaled by amount/count (NO LONGER
+// a flat veto: a large solvent entity, e.g. a bank, can carry a minor proceeding without being
+// insolvent — see scoring-model-spec.md and the role filter below). TIN-keyed.
 //
 // RECON CORRECTION (2026-06-23): the spec feared this source was "Cloudflare + reCAPTCHA-walled"
 // and bundled it with a paid headless+captcha step. That wall is on the cesa.am *contact forms*,
@@ -7,7 +9,7 @@
 // `cabinet.harkadir.am/dahkcabinet/cabinet/debtorinfo/`, a Microsoft-IIS / ASP.NET Core app with NO
 // Cloudflare and NO real captcha — so this is a plain-HTTP adapter, like src.am. No solver, no
 // headless, no proxy. Only OPEN proceedings are exposed (closed history isn't retrievable — why
-// SN-02 was culled), so any returned proceeding IS an open one → B-03.
+// SN-02 was culled), so any returned proceeding IS an open one → SN-11.
 //
 // TRANSPORT (3 GET/POST round-trips, all verified live):
 //   1. GET /dahkcabinet/cabinet/debtorinfo/ → an antiforgery token (hidden __RequestVerificationToken)
@@ -23,6 +25,7 @@
 import { request } from "node:https";
 import type { AdapterResult, SourceAdapter, Subject } from "../lib/adapter";
 import { makeFact } from "../lib/adapter";
+import { legalNameKey } from "../lib/normalize";
 
 const HOST = "cabinet.harkadir.am";
 const PAGE = "/dahkcabinet/cabinet/debtorinfo/";
@@ -57,8 +60,23 @@ export function extractToken(html: string): string {
   return (html.match(/name="__RequestVerificationToken"[^>]*value="([^"]*)"/) || [])[1] || "";
 }
 
+// REMS object shape, confirmed live 2026-06-24 on the first non-empty debtor (Inecobank):
+// each proceeding carries the PLAINTIFF (взыскатель/creditor) name + the claimed amount. There is
+// NO debtor field — the debtor is the queried TIN. CRUCIALLY the endpoint also returns proceedings
+// where the queried entity is the PLAINTIFF (Inecobank's own collections came back under its TIN),
+// so we must drop those: a record is the entity's OWN debt only when the entity is NOT the plaintiff.
 interface Rem {
-  [k: string]: unknown;
+  PLAINTIFFNAME?: string;
+  INQUESTAMOUNT?: number;
+}
+
+// Keep proceedings where the queried entity is the DEBTOR, i.e. it is NOT the listed plaintiff.
+// entityKey from the canonical Armenian name (PLAINTIFFNAME is Armenian); falls back to the raw
+// name, and to "keep all" when we have no name to compare (safe — never silently drops debt).
+export function debtorProceedings(rems: Rem[], entityName: string): Rem[] {
+  const key = legalNameKey(entityName || "");
+  if (!key) return rems;
+  return rems.filter((r) => legalNameKey(r.PLAINTIFFNAME || "") !== key);
 }
 
 export const enforcementAdapter: SourceAdapter = {
@@ -97,20 +115,27 @@ export const enforcementAdapter: SourceAdapter = {
         payload,
       );
       const rems = (JSON.parse(res.body) as { REMS?: Rem[] }).REMS ?? [];
-      if (rems.length === 0) {
-        // Queried successfully, no open proceedings (a real finding, not an error).
+      // Keep only proceedings where the entity is the DEBTOR (drop ones where it is the creditor —
+      // a bank's TIN returns its own collections too). Compare against the canonical Armenian name.
+      const debtor = debtorProceedings(rems, subject.canonicalName || subject.name || "");
+      if (debtor.length === 0) {
+        // Queried successfully; no proceedings AGAINST this entity (none, or only as creditor).
         return { domain: "enforcement", status: "verified_empty", facts: [], fetched_at: now, source: this.source };
       }
-      // Only OPEN proceedings are published here, so any row is an active enforcement → feeds B-03.
-      // v1 reports the COUNT (the load-bearing fact); per-proceeding fields (number/amount/date/
-      // bailiff) are a narrative enrichment to confirm against a real non-empty REMS sample — the
-      // src.am resolver was down during recon so no debtor-with-proceedings could be captured. [TODO]
+      // Only OPEN proceedings are published, so each is an active enforcement against the entity.
+      // Carry count + total claimed amount so the signal layer can scale (no longer a flat veto —
+      // a large solvent entity can carry a minor proceeding without being insolvent). The amount
+      // marker "total <n> AMD" is parsed by the server's SN-11 scaler.
+      const total = debtor.reduce((s, r) => s + (Number(r.INQUESTAMOUNT) || 0), 0);
+      const top = debtor.reduce((a, b) => ((Number(b.INQUESTAMOUNT) || 0) > (Number(a.INQUESTAMOUNT) || 0) ? b : a));
       const fact = makeFact({
         catalog_id: "F-ENF-01",
         subject: tin,
         domain: "enforcement",
         field: "enforcement_proceedings",
-        value: `${rems.length} open compulsory-enforcement proceeding(s) registered with DAHK`,
+        value:
+          `${debtor.length} open compulsory-enforcement proceeding(s) against this entity at DAHK; total ${total.toLocaleString("en-US")} AMD` +
+          (top.PLAINTIFFNAME ? ` (largest creditor: ${top.PLAINTIFFNAME})` : ""),
         source: this.source,
         url: `https://${HOST}${PAGE}`,
         fetched_at: now,

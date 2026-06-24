@@ -22,7 +22,7 @@ import { COVERAGE_DOMAINS } from "../src/lib/adapter";
 import { stripLegal } from "../src/lib/normalize";
 import type { AdapterResult, Subject } from "../src/lib/adapter";
 import { computeVerdict } from "../src/scoring/engine";
-import { baseWeightFor } from "../src/scoring/weights";
+import { baseWeightFor, enforcementWeight } from "../src/scoring/weights";
 import type { Fact, Signal, NarrativeLine, Fixture } from "../src/types";
 
 const PORT = Number(process.env.PORT || 8080);
@@ -100,10 +100,16 @@ function deriveSignals(facts: Fact[]): Signal[] {
     }
   }
 
-  // Enforcement (DAHK). Only OPEN proceedings are published, so the fact's mere presence = active
-  // compulsory enforcement against this TIN → B-03 veto (the strongest free "won't pay" signal).
+  // Enforcement (DAHK). Open proceedings AGAINST this entity (the adapter already dropped ones where
+  // it is the creditor). Reclassified from the old B-03 veto to a SCALED strong negative SN-11: a
+  // flat veto wrongly blocked large solvent entities (a bank with one minor proceeding). Weight scales
+  // by total claimed amount + count (enforcementWeight). Still serious — active bailiff collection.
   const enf = f("F-ENF-01");
-  if (enf) out.push(mkSignal("B-03", "blocker", "-", [enf.fact_id], `Open compulsory-enforcement proceedings at DAHK — ${enf.value}.`));
+  if (enf) {
+    const count = Number((enf.value.match(/^(\d+) open/) || [])[1] || 1);
+    const total = Number((enf.value.match(/total ([\d,]+) AMD/) || [])[1]?.replace(/,/g, "") || 0);
+    out.push(mkSignal("SN-11", "strong", "-", [enf.fact_id], `Open compulsory enforcement at DAHK (active bailiff collection) — ${enf.value}.`, enforcementWeight(total, count)));
+  }
 
   // Procurement (armeps): F-PRC-01 only carries wins already filtered to the ≤36mo SP-03 window
   // (the adapter applies it), so its presence IS the signal — a positive credibility marker.
@@ -231,8 +237,10 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
   // Propagate the TIN src.am resolved so the TIN-keyed adapters (e-register owners) work even when
   // the caller passed only a name — the resolver is the single place the TIN gets pinned.
   const resolvedTin = subject.tin || (taxVal.match(/— TIN (\d+)/) || [])[1] || undefined;
-  const keyedSubject: Subject = { ...subject, tin: resolvedTin };
-  const nameSubject: Subject = { ...subject, tin: resolvedTin, name: canonicalName };
+  // canonicalName rides along so the TIN-keyed enforcement adapter can role-match REMS plaintiffs
+  // (Armenian) against this entity and drop proceedings where it is the creditor, not the debtor.
+  const keyedSubject: Subject = { ...subject, tin: resolvedTin, canonicalName };
+  const nameSubject: Subject = { ...subject, tin: resolvedTin, name: canonicalName, canonicalName };
 
   // Phase 2: keyed adapters (raw subject + resolved TIN) + name-keyed adapters (canonical name).
   const rest = await Promise.all([

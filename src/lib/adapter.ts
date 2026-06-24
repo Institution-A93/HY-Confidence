@@ -23,6 +23,7 @@ export const COVERAGE_DOMAINS: Domain[] = [
 export interface Subject {
   tin?: string;
   name?: string; // legal name (any script)
+  canonicalName?: string; // canonical Armenian name from the src.am resolver (for name role-matching)
   phone?: string;
   email?: string;
   person?: string; // contact first name

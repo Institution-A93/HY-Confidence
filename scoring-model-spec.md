@@ -88,7 +88,7 @@ Weights are **priors for the demo**, to be calibrated against 5–8 known counte
 |---|---|---|
 | B-01 | Target entity has open bankruptcy proceedings | F-CRT-03, F-REG-01 |
 | B-02 | Target in liquidation (registry status or Azdarar notice) | F-REG-01, F-NTC-01 |
-| B-03 | Open DAHK enforcement against target | F-ENF-01 |
+| ~~B-03~~ | **Reclassified → SN-11 (strong negative, scaled).** Open DAHK enforcement was a flat veto until a large solvent entity (a bank with one ~924k AMD municipal proceeding) was wrongly BLOCKED. Open enforcement is real distress, but its weight must scale with the claimed amount/count, not auto-veto. | F-ENF-01 |
 | B-04 | VAT deregistered or tax status suspended | F-TAX-02 |
 | B-05 | UBO or director on a sanctions list | F-SAN-01 |
 | B-06 | **Phoenix pattern**: a director/UBO's previous entity went bankrupt or was abandoned with creditor claims, AND current entity registered ≤12 mo after, AND same activity profile or address | F-GRA-01, F-GRA-02, F-CRT-04, F-REG-02/04 |
@@ -115,6 +115,7 @@ Produces verdict state `UNVERIFIABLE`, rendered differently from RED: "we could 
 | SN-07 | −8 | Entity age <12 mo | F-REG-02 |
 | SN-08 | −8 | Director changed ≥3 times in 24 mo | F-REG-08 |
 | SN-10 | −8 | UBO chain terminates in a foreign entity with no natural person, or BO filing absent/contradictory | F-REG-07 |
+| SN-11 | −8…−15 | Open DAHK compulsory-enforcement proceedings **as debtor** (active bailiff collection); scaled by total claimed amount + count (was blocker B-03). Only proceedings where the entity is the debtor count — ones where it is the creditor/взыскатель are dropped. | F-ENF-01 |
 
 ### Weak negatives
 
@@ -262,6 +263,6 @@ All counterparty-cooperation CTAs are frontend mocks at demo — nothing in scor
 | Vignette | Must fire | Demonstrates |
 |---|---|---|
 | Clear GREEN | SP-01, SP-03, WP-01/02/06, full coverage | Crisp narrow band, confident T3 |
-| Clear RED | B-03 + SN-03 + SN-04 | Blocker short-circuit; gradient fully red with evidence links |
+| Clear RED | B-03 + SN-03 + SN-04 | Blocker short-circuit; gradient fully red with evidence links. (NB: the `red-vanand` demo fixture keeps a B-03 *blocker* entry as a static illustration of the BLOCKED-state UI — live scoring no longer treats enforcement as a blocker, see SN-11 above. Repoint to B-01/B-02 if the demo should match live semantics.) |
 | Reasoning YELLOW | SN-07 + SP-05 + **R-01** | The offset rule producing a visible "concern, but…" narrative — the memorable one |
 | (Optional 4th) | CH-02 + spawn offer | Channel resolves to a different entity; tool offers to check that entity too — dirty input handled in-house, not bounced back to the user |

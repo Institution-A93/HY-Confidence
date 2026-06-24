@@ -66,8 +66,9 @@ Hard model invariants (from the specs — do not silently violate):
   pin the TIN via registry/tax, then re-key queries.
 - Coverage distinguishes "queried, none found" from "could not query" — they are treated
   oppositely (R-09 widens the band; absence of evidence ≠ evidence).
-- BLOCKED (e.g. open enforcement, bankruptcy, sanctions) vetoes the score. UNVERIFIABLE
-  (identity could not be confirmed) is a separate state, NOT a RED verdict.
+- BLOCKED (bankruptcy, liquidation, sanctions) vetoes the score. Open DAHK enforcement is NOT a
+  blocker — it is a scaled strong negative (SN-11; was B-03), since a large solvent entity can carry
+  a minor proceeding. UNVERIFIABLE (identity could not be confirmed) is a separate state, NOT RED.
 
 ---
 

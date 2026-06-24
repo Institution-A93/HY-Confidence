@@ -24,6 +24,7 @@ export const BASE_WEIGHTS: Record<string, number | null> = {
   "SN-07": -8,
   "SN-08": -8,
   "SN-10": -8,
+  "SN-11": -8, // open DAHK enforcement as debtor (reclassified from blocker B-03); scaled by amount, see below
   // Weak negatives
   "WN-01": -3,
   "WN-02": -2,
@@ -65,3 +66,23 @@ export const FUZZY_DAMPING = 0.7;
 
 // R-01: track-record offset halves the young-entity penalties when SP-05 fired.
 export const TRACK_RECORD_OFFSET = 0.5;
+
+// SN-11 (open DAHK enforcement as debtor) was the B-03 blocker until a huge solvent entity
+// (Inecobank, one ~924k AMD municipal proceeding) showed a flat veto is wrong. Now it scales by the
+// total claimed amount + proceeding count. Demo priors (AMD), to calibrate; absolute (no per-entity
+// size normalization available), so small enforcement = caution, large/many = heavy negative.
+export const ENFORCEMENT_WEIGHTS = {
+  base: -8, // a single, modest open proceeding
+  mid: -12, // total ≥ midAmd, or ≥ 3 proceedings
+  high: -15, // total ≥ highAmd, or ≥ 5 proceedings
+  midAmd: 5_000_000,
+  highAmd: 50_000_000,
+};
+
+// Map (total claimed AMD, proceeding count) → SN-11 weight.
+export function enforcementWeight(totalAmd: number, count: number): number {
+  const w = ENFORCEMENT_WEIGHTS;
+  if (totalAmd >= w.highAmd || count >= 5) return w.high;
+  if (totalAmd >= w.midAmd || count >= 3) return w.mid;
+  return w.base;
+}
