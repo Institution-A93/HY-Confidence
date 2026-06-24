@@ -115,7 +115,7 @@ Produces verdict state `UNVERIFIABLE`, rendered differently from RED: "we could 
 | SN-07 | −8 | Entity age <12 mo | F-REG-02 |
 | SN-08 | −8 | Director changed ≥3 times in 24 mo | F-REG-08 |
 | SN-10 | −8 | UBO chain terminates in a foreign entity with no natural person, or BO filing absent/contradictory | F-REG-07 |
-| SN-11 | −8…−15 | Open DAHK compulsory-enforcement proceedings **as debtor** (active bailiff collection); scaled by total claimed amount + count (was blocker B-03). Only proceedings where the entity is the debtor count — ones where it is the creditor/взыскатель are dropped. | F-ENF-01 |
+| SN-11 | −8…−15 | Open DAHK compulsory-enforcement proceedings **as debtor** (active bailiff collection); scaled by total claimed amount + count (was blocker B-03). The cabinet.harkadir.am *debtorinfo* search is keyed by the debtor's HVHH, so every returned proceeding is one where the entity is the debtor (no role filter needed). | F-ENF-01 |
 
 ### Weak negatives
 

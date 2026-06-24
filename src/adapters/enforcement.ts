@@ -1,7 +1,7 @@
 // F-ENF-01 — open compulsory-enforcement proceedings at DAHK (the MoJ Compulsory Enforcement
 // Service). A strong "won't pay" signal → strong-negative SN-11, scaled by amount/count (NO LONGER
 // a flat veto: a large solvent entity, e.g. a bank, can carry a minor proceeding without being
-// insolvent — see scoring-model-spec.md and the role filter below). TIN-keyed.
+// insolvent — see scoring-model-spec.md). TIN-keyed; the debtor-search returns this entity's debts.
 //
 // RECON CORRECTION (2026-06-23): the spec feared this source was "Cloudflare + reCAPTCHA-walled"
 // and bundled it with a paid headless+captcha step. That wall is on the cesa.am *contact forms*,
@@ -25,7 +25,6 @@
 import { request } from "node:https";
 import type { AdapterResult, SourceAdapter, Subject } from "../lib/adapter";
 import { makeFact } from "../lib/adapter";
-import { legalNameKey } from "../lib/normalize";
 
 const HOST = "cabinet.harkadir.am";
 const PAGE = "/dahkcabinet/cabinet/debtorinfo/";
@@ -60,23 +59,16 @@ export function extractToken(html: string): string {
   return (html.match(/name="__RequestVerificationToken"[^>]*value="([^"]*)"/) || [])[1] || "";
 }
 
-// REMS object shape, confirmed live 2026-06-24 on the first non-empty debtor (Inecobank):
-// each proceeding carries the PLAINTIFF (взыскатель/creditor) name + the claimed amount. There is
-// NO debtor field — the debtor is the queried TIN. CRUCIALLY the endpoint also returns proceedings
-// where the queried entity is the PLAINTIFF (Inecobank's own collections came back under its TIN),
-// so we must drop those: a record is the entity's OWN debt only when the entity is NOT the plaintiff.
+// REMS object shape, confirmed live 2026-06-24 (Inecobank, first non-empty result): each row is
+// { PLAINTIFFNAME (Պահանջատեր = creditor/взыскатель), INQUESTAMOUNT }. There is NO debtor field
+// because this is the cabinet.harkadir.am *debtorinfo* portal — you search your OWN passport/HVHH
+// (PASSPORTORHVHH) and every returned proceeding is one where the queried entity IS THE DEBTOR
+// (the rendered grid shows only the «Պահանջատեր» creditor column + amount). So we do NOT role-filter:
+// all rows are this entity's debts. (An earlier guard dropped rows whose creditor name == the entity
+// — wrong: that just hid a real debt whose creditor field was garbled, e.g. «ԻՆԵԿՈԲԱՆԿ ՓԲԸ ՓԲԸ».)
 interface Rem {
   PLAINTIFFNAME?: string;
   INQUESTAMOUNT?: number;
-}
-
-// Keep proceedings where the queried entity is the DEBTOR, i.e. it is NOT the listed plaintiff.
-// entityKey from the canonical Armenian name (PLAINTIFFNAME is Armenian); falls back to the raw
-// name, and to "keep all" when we have no name to compare (safe — never silently drops debt).
-export function debtorProceedings(rems: Rem[], entityName: string): Rem[] {
-  const key = legalNameKey(entityName || "");
-  if (!key) return rems;
-  return rems.filter((r) => legalNameKey(r.PLAINTIFFNAME || "") !== key);
 }
 
 export const enforcementAdapter: SourceAdapter = {
@@ -115,27 +107,20 @@ export const enforcementAdapter: SourceAdapter = {
         payload,
       );
       const rems = (JSON.parse(res.body) as { REMS?: Rem[] }).REMS ?? [];
-      // Keep only proceedings where the entity is the DEBTOR (drop ones where it is the creditor —
-      // a bank's TIN returns its own collections too). Compare against the canonical Armenian name.
-      const debtor = debtorProceedings(rems, subject.canonicalName || subject.name || "");
-      if (debtor.length === 0) {
-        // Queried successfully; no proceedings AGAINST this entity (none, or only as creditor).
+      if (rems.length === 0) {
+        // Queried successfully, no open proceedings against this entity (a real finding, not error).
         return { domain: "enforcement", status: "verified_empty", facts: [], fetched_at: now, source: this.source };
       }
-      // Only OPEN proceedings are published, so each is an active enforcement against the entity.
-      // Carry count + total claimed amount so the signal layer can scale (no longer a flat veto —
-      // a large solvent entity can carry a minor proceeding without being insolvent). The amount
-      // marker "total <n> AMD" is parsed by the server's SN-11 scaler.
-      const total = debtor.reduce((s, r) => s + (Number(r.INQUESTAMOUNT) || 0), 0);
-      const top = debtor.reduce((a, b) => ((Number(b.INQUESTAMOUNT) || 0) > (Number(a.INQUESTAMOUNT) || 0) ? b : a));
+      // Every row is an OPEN proceeding where this TIN is the debtor (debtorinfo portal). Carry
+      // count + total claimed amount so the signal layer can scale SN-11 (no longer a flat veto —
+      // a large solvent entity can carry minor proceedings). "total <n> AMD" is parsed downstream.
+      const total = rems.reduce((s, r) => s + (Number(r.INQUESTAMOUNT) || 0), 0);
       const fact = makeFact({
         catalog_id: "F-ENF-01",
         subject: tin,
         domain: "enforcement",
         field: "enforcement_proceedings",
-        value:
-          `${debtor.length} open compulsory-enforcement proceeding(s) against this entity at DAHK; total ${total.toLocaleString("en-US")} AMD` +
-          (top.PLAINTIFFNAME ? ` (largest creditor: ${top.PLAINTIFFNAME})` : ""),
+        value: `${rems.length} open compulsory-enforcement proceeding(s) against this entity at DAHK; total ${total.toLocaleString("en-US")} AMD`,
         source: this.source,
         url: `https://${HOST}${PAGE}`,
         fetched_at: now,

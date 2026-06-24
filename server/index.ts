@@ -237,10 +237,8 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
   // Propagate the TIN src.am resolved so the TIN-keyed adapters (e-register owners) work even when
   // the caller passed only a name — the resolver is the single place the TIN gets pinned.
   const resolvedTin = subject.tin || (taxVal.match(/— TIN (\d+)/) || [])[1] || undefined;
-  // canonicalName rides along so the TIN-keyed enforcement adapter can role-match REMS plaintiffs
-  // (Armenian) against this entity and drop proceedings where it is the creditor, not the debtor.
-  const keyedSubject: Subject = { ...subject, tin: resolvedTin, canonicalName };
-  const nameSubject: Subject = { ...subject, tin: resolvedTin, name: canonicalName, canonicalName };
+  const keyedSubject: Subject = { ...subject, tin: resolvedTin };
+  const nameSubject: Subject = { ...subject, tin: resolvedTin, name: canonicalName };
 
   // Phase 2: keyed adapters (raw subject + resolved TIN) + name-keyed adapters (canonical name).
   const rest = await Promise.all([
