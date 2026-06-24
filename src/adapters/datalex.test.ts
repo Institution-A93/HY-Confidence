@@ -70,6 +70,11 @@ describe("parseClaimAmount (demanded sum from the petitum)", () => {
   it("skips law-article numbers before the verb", () => {
     expect(parseClaimAmount("ղեկավարվելով 120-122-րդ հոդվածներով բռնագանձել 15871536.20 ՀՀ դրամ")).toBe("15871536 AMD");
   });
+  it("skips a masked card/account number ('…7001 դրամային') and takes the real « ՀՀ դրամ» amount", () => {
+    const claim =
+      "Խնդրում եմ ... բռնագանձել 1. Թիվ 20501******7001 դրամային քարտային հաշվին ձևավորված գերածախսի գումարը՝ 195,420.69 ՀՀ դրամ";
+    expect(parseClaimAmount(claim)).toBe("195,420 AMD");
+  });
   it("returns empty when there is no monetary demand (e.g. an executive-writ request)", () => {
     expect(parseClaimAmount("խնդրում ենք տրամադրել կատարողական թերթ")).toBe("");
     expect(parseClaimAmount("")).toBe("");

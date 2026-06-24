@@ -69,7 +69,11 @@ interface Row {
 // Amount = digit groups separated by space/comma/dot (thousands) + optional 2-digit minor tail; OR a
 // plain run. Grouped alt FIRST so "10 000 000" is taken whole (else it captures only the trailing "000").
 const NUM = String.raw`\d{1,3}(?:[ .,]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?`;
-const CLAIM_RE = new RegExp(`(${NUM})\\D{0,80}?(ՀՀ\\s*դրամ|ԱՄՆ\\s*դոլար|դրամ|դոլար)`);
+// Currency unit, NOT the adjective «դրամային» ("dram-denominated", used for account/card descriptions
+// like «...7001 դրամային քարտային հաշվին...»): the (?!ային) guard skips a masked card number's
+// trailing digits and lands on the real «… ՀՀ դրամ» amount. Genitive «դրամի» (payment orders) still matches.
+const CCY = String.raw`ՀՀ\s*դրամ(?!ային)|ԱՄՆ\s*դոլար|դրամ(?!ային)|դոլար`;
+const CLAIM_RE = new RegExp(`(${NUM})\\D{0,80}?(${CCY})`);
 export function parseClaimAmount(raw: string): string {
   const t = (raw || "").replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
   if (!t) return "";
