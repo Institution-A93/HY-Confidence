@@ -254,3 +254,12 @@ export function sameEntityScore(a: string, b: string): number {
 export function sameEntity(a: string, b: string, threshold = 0.5): boolean {
   return sameEntityScore(a, b) >= threshold;
 }
+
+// Armenian-preserving comparable key: drop legal forms + «»/quotes (stripLegal) and every
+// non-letter, KEEPING Armenian script (unlike toLatinKey, which transliterates and loses
+// precision). So «ԱՄԵՐԻԱԲԱՆԿ» ՓԲԸ-ի → "ամերիաբանկ". Used to test party/subject identity on
+// Armenian-indexed sources. (datalex.ts / pledge.ts carry a local copy of this — fold them in
+// here when next touched.)
+export function legalNameKey(s: string): string {
+  return stripLegal(s).toLowerCase().replace(/[^a-z0-9ա-և]/g, "");
+}

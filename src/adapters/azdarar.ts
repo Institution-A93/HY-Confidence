@@ -6,6 +6,7 @@
 import { get } from "node:https";
 import type { AdapterResult, SourceAdapter, Subject } from "../lib/adapter";
 import { makeFact } from "../lib/adapter";
+import { legalNameKey } from "../lib/normalize";
 
 const HOST = "azdarar.am";
 const SEARCH = "/hy/public-announcement/search-result/";
@@ -48,19 +49,36 @@ function classify(t: string): NoticeType {
   return "other";
 }
 
-function parseNotices(html: string): Notice[] {
+// Each result row is a <tr ... data-href=".../view/<uuid>"> of <td class="…result-table-cell…">
+// cells. Column order (verified live 2026-06-24): [0] category, [1] TITLE/subject, [2] body
+// snippet, [3] —, [4] date. The title names the notice's SUBJECT (the bankrupt/liquidated party);
+// the body snippet may name OTHER parties (e.g. a creditor) — so the subject guard below keys on
+// the title cell, never the body. (The old parser keyed cells on </div>; the markup uses <span>.)
+export function parseNotices(html: string): Notice[] {
   const out: Notice[] = [];
-  const blocks = html.split(`data-href="https://azdarar.am/hy/public-announcement/view/`);
-  for (const b of blocks.slice(1)) {
-    const uuid = b.slice(0, 36);
-    const cells = [...b.matchAll(/result-table-cell[^>]*>([\s\S]*?)<\/div>/g)]
-      .map((m) => m[1].replace(/<[^>]+>/g, "").replace(/&laquo;|&raquo;/g, "«").replace(/\s+/g, " ").trim())
-      .filter(Boolean);
-    const title = cells.find((c) => c.length > 20) || cells[0] || "";
-    const date = (b.match(/(\d{2}\.\d{2}\.\d{4})/) || [])[1] || "";
+  const rowRe = /<tr class="list__result-table-drow[^"]*"[^>]*data-href="https:\/\/azdarar\.am\/hy\/public-announcement\/view\/([0-9a-f-]{36})">([\s\S]*?)<\/tr>/g;
+  for (const m of html.matchAll(rowRe)) {
+    const uuid = m[1];
+    const cells = [...m[2].matchAll(/<td class="list__result-table-cell[^"]*">([\s\S]*?)<\/td>/g)].map((c) =>
+      c[1].replace(/<[^>]+>/g, " ").replace(/&laquo;|&raquo;/g, "«").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim(),
+    );
+    const title = cells[1] || cells.find((c) => c.length > 20) || cells[0] || "";
+    const date = (m[2].match(/(\d{2}\.\d{2}\.\d{4})/) || [])[1] || "";
     if (title) out.push({ title, date, uuid, type: classify(title) });
   }
   return out;
+}
+
+// Azdarar's search is FULL-TEXT, so it also returns notices where the entity is merely mentioned in
+// the body — most damagingly as a CREDITOR (Պարտատեր) on someone else's bankruptcy. Attributing
+// those to the entity falsely fires B-02/SN-04 (e.g. Ameriabank, listed as creditor on a debtor's
+// bankruptcy, read as bankrupt itself — and likewise every large lender). A distress notice is the
+// entity's own ONLY when the entity is its SUBJECT, i.e. named in the TITLE. Armenian declension
+// appends the genitive «-ի» to the name, so substring-on-normalized-key matches «ԱՄԵՐԻԱԲԱՆԿ» inside
+// the title's «ԱՄԵՐԻԱԲԱՆԿ»-ի; a false negative (truncated title) only fails to flag — the safe side.
+export function titleNamesEntity(title: string, name: string): boolean {
+  const qKey = legalNameKey(name);
+  return !!qKey && legalNameKey(title).includes(qKey);
 }
 
 const LABEL: Record<NoticeType, string> = {
@@ -82,7 +100,9 @@ export const azdararAdapter: SourceAdapter = {
       const html = await httpsGet(`${SEARCH}?query=${encodeURIComponent(name)}`);
       // F-NTC-01 is about distress notices (liquidation/bankruptcy/capital/creditor/reorg);
       // unrelated "other" notices (e.g. court summonses) are not scored → queried-empty.
-      const notices = parseNotices(html).filter((n) => n.type !== "other");
+      // titleNamesEntity drops notices where the entity is only a mentioned party (e.g. creditor),
+      // keeping only ones where it is the SUBJECT — see the guard's rationale above.
+      const notices = parseNotices(html).filter((n) => n.type !== "other" && titleNamesEntity(n.title, name));
       if (notices.length === 0) {
         return { domain: "notice", status: "verified_empty", facts: [], fetched_at: now, source: this.source };
       }
