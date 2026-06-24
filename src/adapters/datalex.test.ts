@@ -2,7 +2,7 @@
 // by tools/smoke-adapters.ts against the live portal; the deterministic suite tests only the
 // parsing helpers that turn grid rows into the recency signal.
 import { describe, it, expect } from "vitest";
-import { mostRecentCaseYear, caseUrl, nameKey, partyMatchesQuery } from "./datalex";
+import { mostRecentCaseYear, caseUrl, nameKey, partyMatchesQuery, parseClaimAmount } from "./datalex";
 
 describe("mostRecentCaseYear", () => {
   it("parses the 2-digit year suffix of Armenian case numbers", () => {
@@ -46,6 +46,33 @@ describe("token-containment guard", () => {
     const gc = nameKey("Գրանդ Քենդի");
     expect(partyMatchesQuery("Գրանդ Քենդի ՍՊԸ", gc)).toBe(true);
     expect(partyMatchesQuery("Գրանդ Տոբակո ՍՊԸ", gc)).toBe(false);
+  });
+});
+
+describe("parseClaimAmount (demanded sum from the petitum)", () => {
+  it("payment order: amount before «դրամ», no verb", () => {
+    expect(parseClaimAmount("945.274 դրամի պ/մ")).toBe("945.274 AMD"); // .274 is a 3-digit group → kept
+  });
+  it("civil: first sum after «բռնագանձել», drops a 2-digit lumas tail", () => {
+    expect(parseClaimAmount("...բռնագանձել 15871536.20 /տասնհինգ միլիոն.../ ՀՀ դրամ, ինչպես նաև")).toBe("15871536 AMD");
+    expect(parseClaimAmount("հօգուտ Բանկի բռնագանձել 18,836,876,70 ՀՀ դրամ, որից")).toBe("18,836,876 AMD");
+  });
+  it("takes the principal (first after the verb), not later interest/penalty figures", () => {
+    expect(parseClaimAmount("ԽՆԴՐՈՒՄ ԵՆՔ բռնագանձել ընդհանուր 2,518,180.80 (երկու միլիոն ... դրամ) ՀՀ դրամ և 26,034.68 ԱՄՆ դոլար")).toBe("2,518,180 AMD");
+  });
+  it("handles space-separated thousands as one number (not the trailing group)", () => {
+    expect(parseClaimAmount("բռնագանձել 10 000 000 ՀՀ դրամ")).toBe("10 000 000 AMD");
+    expect(parseClaimAmount("բռնագանձել 5 000 000.50 ՀՀ դրամ")).toBe("5 000 000 AMD");
+  });
+  it("USD claims are labelled USD", () => {
+    expect(parseClaimAmount("բռնագանձել 26,034.68 ԱՄՆ դոլար")).toBe("26,034 USD");
+  });
+  it("skips law-article numbers before the verb", () => {
+    expect(parseClaimAmount("ղեկավարվելով 120-122-րդ հոդվածներով բռնագանձել 15871536.20 ՀՀ դրամ")).toBe("15871536 AMD");
+  });
+  it("returns empty when there is no monetary demand (e.g. an executive-writ request)", () => {
+    expect(parseClaimAmount("խնդրում ենք տրամադրել կատարողական թերթ")).toBe("");
+    expect(parseClaimAmount("")).toBe("");
   });
 });
 

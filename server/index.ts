@@ -147,9 +147,14 @@ function deriveSignals(facts: Fact[]): Signal[] {
   const civilDef = def ? Number((def.value.match(/(\d+) civil case/) || [])[1] || 0) : 0;
   const payDef = def ? Number((def.value.match(/(\d+) payment-order/) || [])[1] || 0) : 0;
   const plaCount = pla ? Number((pla.value.match(/Plaintiff in (\d+)/) || [])[1] || 0) : 0;
+  // The datalex grid carries the demanded sum (petitum) in the fact value as "claim e.g. <amount>";
+  // surface it in the narrative as an EXAMPLE of exposure magnitude. It's the demanded (not awarded)
+  // amount and only a sample row — so it informs the reader, it does not scale the weight.
+  const claimOf = (v?: string) => (v ? ((v.match(/claim e\.g\. ([\d., ]+(?:AMD|USD))/) || [])[1] || "").trim() : "");
 
   if (pla) {
-    out.push(mkSignal("WP-09", "weak", "+", [pla.fact_id], `Plaintiff in ${plaCount} collection case(s)${civilDef ? ` (vs ${civilDef} as defendant)` : ""} — actively enforces its own receivables.` + NAME_MATCHED));
+    const ex = claimOf(pla.value);
+    out.push(mkSignal("WP-09", "weak", "+", [pla.fact_id], `Plaintiff in ${plaCount} collection case(s)${civilDef ? ` (vs ${civilDef} as defendant)` : ""}${ex ? `; example claim ${ex}` : ""} — actively enforces its own receivables.` + NAME_MATCHED));
   }
   if (def) {
     const yr = yearIn(def.value);
@@ -167,7 +172,8 @@ function deriveSignals(facts: Fact[]): Signal[] {
       const desc = payDef > 0
         ? `Net debt/litigation target: ${civilDef} civil + ${payDef} payment-order case(s) vs ${plaCount} as plaintiff`
         : `Net litigation target: ${civilDef} case(s) as defendant vs ${plaCount} as plaintiff`;
-      out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `${desc}${yr ? `, most recent ${yr}` : ""}.` + NAME_MATCHED, base));
+      const ex = claimOf(def.value);
+      out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `${desc}${yr ? `, most recent ${yr}` : ""}${ex ? `; example claim ${ex}` : ""}.` + NAME_MATCHED, base));
     } else if (net >= 1 && target === 1) {
       out.push(mkSignal("WN-07", "weak", "-", [def.fact_id], "A single, dated defendant case (>24 months old)." + NAME_MATCHED));
     }

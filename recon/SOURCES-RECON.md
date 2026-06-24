@@ -168,11 +168,16 @@ the "hardest, headless" assumption with a plain JSON API.
 - **Recency** comes from the case number's trailing 2-digit year (`ԵԴ/0254/02/26` → 2026) — more
   reliable than `creation_datetime`, which is null on bankruptcy rows. Feeds R-06 decay + the B-01
   "open" inference (≤4y).
-- ⚠ **Case DETAIL (openCase) is CAPTCHA-GATED** ("Մուտքագրեք նկարի տեքստը"). So claim AMOUNTS,
-  verdict OUTCOMES, and explicit open/closed STATUS are NOT retrievable without a solver. v1 uses
-  counts + recency only: SN-01 not amount-scaled, WP-09 can't confirm "wins", B-01 infers "open"
-  from recency. Case URLs `?app=AppCaseSearch&case_id=<external_id>` ARE replayable (link the user;
-  they solve the captcha to read the detail).
+- ⚠ **Case DETAIL (openCase) is CAPTCHA-GATED** ("Մուտքագրեք նկարի տեքստը", `ModCaptcha` image —
+  POST `/json.php function=openCase arg=[row+case_type]` → `{html}` is just the captcha form on the
+  first hit, per-case). So verdict OUTCOMES and explicit open/closed STATUS need a solver — but the
+  claim AMOUNT does NOT: **the grid row's `claim` field already carries the plaintiff's full petitum
+  text** (recon 2026-06-24). So no CapSolver is needed for amounts — `parseClaimAmount` (datalex.ts)
+  pulls the demanded sum (first figure after «բռնագանձել»; payment orders have none) and surfaces it
+  as a narrative EXAMPLE. SN-01 stays count+recency-scaled (the source's decimal/thousands separators
+  are inconsistent — `945.274`=945k vs `15871536.20`=15.8M — so the parsed sum is display-only, not a
+  scored number). B-01 infers "open" from recency. Case URLs `?app=AppCaseSearch&case_id=<external_id>`
+  ARE replayable (link the user; they solve the captcha to read the full outcome).
 - **Match precision (recon 2026-06-23) + token-containment guard (BUILT).** The name search is a
   NORMALIZED SUBSTRING/token match (case/spacing/«»/legal-form insensitive), so it OVER-matches:
   «ԱՊԱՎԵՆ» also returns «Ապավեն Տերմինալ» / «Հույսի Ապավեն» (different firms) + multi-party rows;
@@ -184,8 +189,9 @@ the "hardest, headless" assumption with a plain JSON API.
   entities with the IDENTICAL name** (active vs liquidated «ԱՊԱՎԵՆ» share the count) — that needs the
   TIN/graph; hence court facts are also always `match:"fuzzy"` (R-08 damps SN-01/WP-09 ×0.7).
 - ✅ DONE: payment_order tab (debt-collection defendant → folded into SN-01); name retry for trailing
-  descriptor words (ԳՐՈՒՊ); token-containment guard. Follow-ups: person/sole-proprietor party search
-  (first+last name fields); claim-amount parsing if/when the detail captcha is solved.
+  descriptor words (ԳՐՈՒՊ); token-containment guard; claim-amount parsing from the grid `claim` field
+  (no captcha). Follow-ups: person/sole-proprietor party search (first+last name fields); verdict
+  OUTCOME + amount-scaling once the detail captcha is solved (CapSolver `ImageToTextTask` on ModCaptcha).
 
 ## cabinet.harkadir.am — DAHK / compulsory enforcement (enforcement) · Epic D1 — ✅ BUILT & LIVE (recon 2026-06-23)
 Facts: F-ENF-01 open proceedings — strongest free "won't pay" signal (→ blocker B-03). Adapter:
