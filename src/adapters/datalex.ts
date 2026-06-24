@@ -160,49 +160,50 @@ function ajaxPost(cookie: string, params: Record<string, string>): Promise<{ hea
   );
 }
 
+// A real case-detail page is hundreds of KB; the captcha form is ~1.3KB and a transient datalex
+// error returns an empty/short body. So "this is the actual detail" = no captcha AND substantial.
+const DETAIL_MIN_BYTES = 5000;
+
 // Read a bankruptcy case's merits verdict via the captcha-gated detail view (recon 2026-06-24):
 // openCase sets the case in session + returns a captcha → GET the GIF (section_name=userRegKey) →
 // solve (CapSolver) → showCase(ModCaseViewer, [text]) returns the detail HTML → parse the verdict.
-// Best-effort: returns "unknown" without a CAPSOLVER_API_KEY or on ANY error, so the caller keeps the
-// conservative recency-based B-01. One captcha per call; bankruptcies are few per entity. 3 retries
-// (CapSolver isn't 100%). The openCase→showCase shape is non-obvious — see the recon notes.
+// Best-effort: returns "unknown" without a CAPSOLVER_API_KEY or on persistent failure, so the caller
+// keeps the conservative recency-based B-01. The retry loop handles BOTH a wrong captcha (showCase
+// returns the captcha form again) AND a transient empty/error response (datalex intermittently omits
+// result.html) — earlier these short bodies were mistaken for an unlocked-but-empty detail → a false
+// "unknown" that the 6h cache then froze. The openCase→showCase shape is non-obvious (see recon).
 async function bankruptcyVerdict(cookie: string, row: Row): Promise<"rejected" | "declared" | "unknown"> {
   if (!process.env.CAPSOLVER_API_KEY) return "unknown";
-  try {
-    const cd = { ...row, case_type: BANKRUPTCY.caseType, case_type_id: BANKRUPTCY.caseTypeID, search_description: BANKRUPTCY.gsd };
-    const ocBody = (
-      await ajaxPost(cookie, {
-        appName: "AppCaseSearch", appPage: "default", moduleID: "Common/ModGrid", class: "", function: "openCase",
-        name: "Common/ModGrid", type: "modules", dataType: "json", arg: JSON.stringify([cd]), module_params: JSON.stringify(moduleParams(BANKRUPTCY)),
-      })
-    ).body;
-    const oc = JSON.parse(ocBody) as { result?: { html?: string }; module_params?: { ModCaseViewer?: Record<string, unknown> }; module_hierarchy?: { id: string; jsParams?: { captchaUrl?: string } }[] };
-    let html = oc.result?.html || "";
-    if (!/mod-captcha/.test(html)) return parseBankruptcyOutcome(html); // session already unlocked
-    const mcv = oc.module_params?.ModCaseViewer;
-    const captchaUrl = oc.module_hierarchy?.find((mm) => mm.id === "ModCaptcha")?.jsParams?.captchaUrl;
-    if (!mcv || !captchaUrl) return "unknown";
-    const capPath = captchaUrl.replace(/^https?:\/\/[^/]+/, ""); // path+query of file.php?...&section_name=userRegKey
-    for (let attempt = 0; attempt < 3; attempt++) {
+  const ocFn = {
+    appName: "AppCaseSearch", appPage: "default", moduleID: "Common/ModGrid", class: "", function: "openCase",
+    name: "Common/ModGrid", type: "modules", dataType: "json",
+    arg: JSON.stringify([{ ...row, case_type: BANKRUPTCY.caseType, case_type_id: BANKRUPTCY.caseTypeID, search_description: BANKRUPTCY.gsd }]),
+    module_params: JSON.stringify(moduleParams(BANKRUPTCY)),
+  };
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      const oc = JSON.parse((await ajaxPost(cookie, ocFn)).body) as {
+        result?: { html?: string }; module_params?: { ModCaseViewer?: Record<string, unknown> }; module_hierarchy?: { id: string; jsParams?: { captchaUrl?: string } }[];
+      };
+      let html = oc.result?.html || "";
+      if (!/mod-captcha/.test(html) && html.length >= DETAIL_MIN_BYTES) return parseBankruptcyOutcome(html); // session already unlocked
+      const mcv = oc.module_params?.ModCaseViewer;
+      const captchaUrl = oc.module_hierarchy?.find((mm) => mm.id === "ModCaptcha")?.jsParams?.captchaUrl;
+      if (!mcv || !captchaUrl) continue; // transient openCase miss → retry
+      const capPath = captchaUrl.replace(/^https?:\/\/[^/]+/, ""); // path+query of file.php?...&section_name=userRegKey
       const gif = await httpsGetBuffer(capPath, cookie);
       const text = (await solveImageToText(gif.toString("base64"))).trim();
-      html =
-        (
-          JSON.parse(
-            (
-              await ajaxPost(cookie, {
-                appName: "AppCaseSearch", appPage: "default", moduleID: String(mcv.moduleID), class: "", function: "showCase",
-                name: "ModCaseViewer", type: "modules", dataType: "json", arg: JSON.stringify([text]), module_params: JSON.stringify(mcv),
-              })
-            ).body,
-          ) as { result?: { html?: string } }
-        ).result?.html || "";
-      if (!/mod-captcha/.test(html)) return parseBankruptcyOutcome(html);
+      html = (JSON.parse((await ajaxPost(cookie, {
+        appName: "AppCaseSearch", appPage: "default", moduleID: String(mcv.moduleID), class: "", function: "showCase",
+        name: "ModCaseViewer", type: "modules", dataType: "json", arg: JSON.stringify([text]), module_params: JSON.stringify(mcv),
+      })).body) as { result?: { html?: string } }).result?.html || "";
+      if (!/mod-captcha/.test(html) && html.length >= DETAIL_MIN_BYTES) return parseBankruptcyOutcome(html);
+      // else: wrong captcha or a transient short/empty body → retry
+    } catch {
+      /* transient network / CapSolver error → retry */
     }
-    return "unknown";
-  } catch {
-    return "unknown";
   }
+  return "unknown";
 }
 
 interface GridResult {
