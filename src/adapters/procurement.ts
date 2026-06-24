@@ -174,7 +174,9 @@ export const procurementAdapter: SourceAdapter = {
           `${recentLabel} state-procurement win(s) in the last 36 months${total > recent.length ? ` (${total} all-time)` : ""}; ` +
           `most recent: ${title ? `${title.slice(0, 80)} — ` : ""}${amount(top.contractValue)}, ${isoDate(top.dateSigned)}${buyer ? `, buyer ${buyer}` : ""}`,
         source: this.source,
-        url: `https://${HOST}/ppcm/#/public/contracts`,
+        // No deep link: the PPCM SPA has no replayable per-supplier URL — the contracts route is a
+        // generic list, not this supplier's, so url:"" (disabled ↗) rather than a non-relevant page.
+        url: "",
         fetched_at: now,
         match: picked.match, // exact only when the supplier's taxpayerId === subject.tin
       });

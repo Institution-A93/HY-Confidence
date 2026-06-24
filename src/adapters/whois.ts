@@ -59,7 +59,10 @@ export const whoisAdapter: SourceAdapter = {
             field: "domain_history",
             value,
             source: this.source,
-            url: `https://whois.amnic.net/?domain=${domain}`,
+            // No deep link: whois.amnic.net is dead and www.amnic.net/whois is a JS form that does not
+            // reflect a ?domain= param (verified 2026-06-24) — no replayable per-domain URL, so url:""
+            // (disabled ↗). The vintage fact itself comes from the :43 whois protocol, not this page.
+            url: "",
             fetched_at: now,
           }),
         ],

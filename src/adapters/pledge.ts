@@ -162,7 +162,9 @@ export const pledgeAdapter: SourceAdapter = {
         field: "pledges",
         value: `${pledges.length} movable-property pledge(s); most recent ${dateOnly(top.date)}${credLabel ? ` (creditor: ${credLabel})` : ""}`,
         source: this.source,
-        url: top.caseUrl,
+        // No deep link: the AppCaseView case URL is session-bound — opened cold it 302-redirects to
+        // «session_expired» (verified 2026-06-24), not the pledge detail, so url:"" (disabled ↗).
+        url: "",
         fetched_at: now,
         // Name-matched (the register has a TIN/registry-number field, but we key by name from the
         // resolver and cannot split two same-name firms) → R-08 damps SN-06 ×0.7. De-fuzzing via the

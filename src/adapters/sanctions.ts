@@ -136,7 +136,9 @@ export const sanctionsAdapter: SourceAdapter = {
             field: "screening",
             value,
             source: this.source,
-            url: "https://sanctionssearch.ofac.treas.gov/",
+            // No deep link: OFAC's search is a JS/POST app with no replayable per-name GET URL — a
+            // link would only open the blank search, so url:"" (disabled ↗).
+            url: "",
             fetched_at: now,
           }),
         ],

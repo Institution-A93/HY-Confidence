@@ -122,7 +122,9 @@ export const enforcementAdapter: SourceAdapter = {
         field: "enforcement_proceedings",
         value: `${rems.length} open compulsory-enforcement proceeding(s) against this entity at DAHK; total ${total.toLocaleString("en-US")} AMD`,
         source: this.source,
-        url: `https://${HOST}${PAGE}`,
+        // No deep link: the debtor lookup is a POST + per-request captcha nonce, with no replayable
+        // GET URL — a link would only open the blank search form, so url:"" (disabled ↗).
+        url: "",
         fetched_at: now,
         match: "exact", // TIN-confirmed (queried by ՀՎՀՀ, not by name)
       });

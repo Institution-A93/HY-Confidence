@@ -257,9 +257,10 @@ export function mostRecentCaseYear(rows: Row[]): number | null {
   return max;
 }
 
-// datalex cases are session-bound but expose a replayable case URL via the external id. The
-// detail page is captcha-gated, but the link still lets a human find the case (recon: "link
-// users to the search page; store extracted content, not URLs").
+// datalex case URL via the external id. NOTE: facts currently carry url:"" (disabled ↗) — verified
+// 2026-06-24 that ?app=AppCaseSearch&case_id=… only opens the search APP shell (no autoload; the
+// detail is captcha-gated), i.e. a blank-search experience, not the case. Kept (+ tested) for when
+// the detail captcha is solved (CapSolver), at which point facts can link here again.
 export function caseUrl(row: Row | undefined): string {
   return row?.case_external_id ? `https://${HOST}/?app=AppCaseSearch&case_id=${row.case_external_id}` : `https://${HOST}${SEARCH_PAGE}`;
 }
@@ -313,7 +314,7 @@ export const datalexAdapter: SourceAdapter = {
             field: "defendant_cases",
             value: `Defendant: ${parts.join(", ")}${yr ? `; most recent ${yr}` : ""}${claim ? `; claim e.g. ${claim}` : ""} (${rows[0]?.case_number || "—"})`,
             source: this.source,
-            url: caseUrl(rows[0]),
+            url: "", // disabled ↗ — case_id link opens the search app, not the (captcha-gated) case
             fetched_at: now,
             match,
           }),
@@ -330,7 +331,7 @@ export const datalexAdapter: SourceAdapter = {
             field: "plaintiff_cases",
             value: `Plaintiff in ${pla.count} civil case(s)${yr ? `; most recent ${yr}` : ""}${claim ? `; claim e.g. ${claim}` : ""}`,
             source: this.source,
-            url: caseUrl(pla.rows[0]),
+            url: "", // disabled ↗ — see caseUrl note
             fetched_at: now,
             match,
           }),
@@ -346,7 +347,7 @@ export const datalexAdapter: SourceAdapter = {
             field: "bankruptcy_cases",
             value: `Debtor in ${bkr.count} bankruptcy case(s)${yr ? `; most recent ${yr}` : ""} (${bkr.rows[0]?.case_number || "—"})`,
             source: this.source,
-            url: caseUrl(bkr.rows[0]),
+            url: "", // disabled ↗ — see caseUrl note
             fetched_at: now,
             match,
           }),

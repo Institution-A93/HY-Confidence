@@ -11,7 +11,8 @@ import { hasArmenian, toLatinTokens, latinToArmenian, translitHyToLatin, nameSim
 const HOST = "src.am";
 const PAGE = "/en/taxpayerSearchSystemPage/112";
 const SEARCH = "/en/taxpayerSearchData";
-const URL = `https://src.am${PAGE}`;
+// No evidence deep-link: src.am taxpayer search is a POST (XHR) with no replayable GET URL for a
+// specific TIN — a link could only open the blank search form, so facts carry url:"" (disabled ↗).
 const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36";
 
 interface Rec {
@@ -148,13 +149,13 @@ export async function resolveBySrc(name: string, max = 8): Promise<Candidate[]> 
 
 function factsFromRecord(rec: Rec, now: string, match: "exact" | "fuzzy") {
   const facts = [
-    makeFact({ catalog_id: "F-TAX-01", subject: rec.tin, domain: "tax", field: "tin_name_match", value: `${rec.name} — TIN ${rec.tin}`, source: "SRC (src.am)", url: URL, fetched_at: now, match }),
-    makeFact({ catalog_id: "F-TAX-02", subject: rec.tin, domain: "tax", field: "vat_status", value: rec.isVATPayer ? `VAT payer (${rec.ModeTaxation || "ԱԱՀ"})` : "not a VAT payer", source: "SRC (src.am)", url: URL, fetched_at: now, match }),
-    makeFact({ catalog_id: "F-REG-01", subject: rec.tin, domain: "registry", field: "legal_status", value: rec.status || "unknown", source: "SRC (src.am)", url: URL, fetched_at: now, match }),
+    makeFact({ catalog_id: "F-TAX-01", subject: rec.tin, domain: "tax", field: "tin_name_match", value: `${rec.name} — TIN ${rec.tin}`, source: "SRC (src.am)", url: "", fetched_at: now, match }),
+    makeFact({ catalog_id: "F-TAX-02", subject: rec.tin, domain: "tax", field: "vat_status", value: rec.isVATPayer ? `VAT payer (${rec.ModeTaxation || "ԱԱՀ"})` : "not a VAT payer", source: "SRC (src.am)", url: "", fetched_at: now, match }),
+    makeFact({ catalog_id: "F-REG-01", subject: rec.tin, domain: "registry", field: "legal_status", value: rec.status || "unknown", source: "SRC (src.am)", url: "", fetched_at: now, match }),
   ];
-  if (rec.submitDate) facts.push(makeFact({ catalog_id: "F-REG-02", subject: rec.tin, domain: "registry", field: "registration_date", value: rec.submitDate, source: "SRC (src.am)", url: URL, fetched_at: now, match }));
-  if (rec.legalStatus) facts.push(makeFact({ catalog_id: "F-REG-03", subject: rec.tin, domain: "registry", field: "legal_form", value: rec.legalStatus, source: "SRC (src.am)", url: URL, fetched_at: now, match }));
-  if (rec.address) facts.push(makeFact({ catalog_id: "F-REG-04", subject: rec.tin, domain: "registry", field: "address", value: rec.address, source: "SRC (src.am)", url: URL, fetched_at: now, match }));
+  if (rec.submitDate) facts.push(makeFact({ catalog_id: "F-REG-02", subject: rec.tin, domain: "registry", field: "registration_date", value: rec.submitDate, source: "SRC (src.am)", url: "", fetched_at: now, match }));
+  if (rec.legalStatus) facts.push(makeFact({ catalog_id: "F-REG-03", subject: rec.tin, domain: "registry", field: "legal_form", value: rec.legalStatus, source: "SRC (src.am)", url: "", fetched_at: now, match }));
+  if (rec.address) facts.push(makeFact({ catalog_id: "F-REG-04", subject: rec.tin, domain: "registry", field: "address", value: rec.address, source: "SRC (src.am)", url: "", fetched_at: now, match }));
   return facts;
 }
 
@@ -175,7 +176,7 @@ export const srcAdapter: SourceAdapter = {
         if (data.length) break;
       }
       if (data.length === 0) {
-        const f = makeFact({ catalog_id: "F-TAX-01", subject: query, domain: "tax", field: "tin_name_match", value: "no taxpayer found", source: this.source, url: URL, fetched_at: now });
+        const f = makeFact({ catalog_id: "F-TAX-01", subject: query, domain: "tax", field: "tin_name_match", value: "no taxpayer found", source: this.source, url: "", fetched_at: now });
         return { domain: "tax", status: "verified_empty", facts: [f], fetched_at: now, source: this.source };
       }
       const match = subject.tin || data.length === 1 ? "exact" : "fuzzy";
