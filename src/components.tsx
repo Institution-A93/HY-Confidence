@@ -89,29 +89,21 @@ export function factById(fixture: Fixture, id: string): Fact | undefined {
 }
 
 export function EvidenceLinks({ fixture, ids }: { fixture: Fixture; ids?: string[] }) {
-  if (!ids || ids.length === 0) return null;
+  // Render a ↗ ONLY for evidence that has a real, replayable URL. Many facts carry url:"" — there is
+  // no deep-linkable source record (src.am is a POST search, the datalex case detail is captcha-gated,
+  // procurement/enforcement land on a generic page). A dead arrow that opens nothing reads as a broken
+  // link, so we drop those entirely rather than show a disabled symbol. No live links → no ↗ at all.
+  const links = (ids || [])
+    .map((id) => factById(fixture, id))
+    .filter((f): f is NonNullable<typeof f> => !!f && !!f.url);
+  if (links.length === 0) return null;
   return (
     <span className="ev-group">
-      {ids.map((id, i) => {
-        const f = factById(fixture, id);
-        const url = f && f.url;
-        return (
-          <a
-            key={i}
-            className="ev"
-            href={url || undefined}
-            target="_blank"
-            rel="noreferrer"
-            aria-disabled={!url}
-            title={f ? f.source + " — " + (url || "no link") : id}
-            onClick={(e) => {
-              if (!url) e.preventDefault();
-            }}
-          >
-            ↗
-          </a>
-        );
-      })}
+      {links.map((f, i) => (
+        <a key={i} className="ev" href={f.url} target="_blank" rel="noreferrer" title={f.source}>
+          ↗
+        </a>
+      ))}
     </span>
   );
 }
