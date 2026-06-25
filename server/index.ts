@@ -160,7 +160,7 @@ function deriveSignals(facts: Fact[]): Signal[] {
 
   if (pla) {
     const ex = claimOf(pla.value);
-    out.push(mkSignal("WP-09", "weak", "+", [pla.fact_id], `Plaintiff in ${plaCount} collection case(s)${civilDef ? ` (vs ${civilDef} as defendant)` : ""}${ex ? `; example claim ${ex}` : ""} — actively enforces its own receivables.` + NAME_MATCHED));
+    out.push(mkSignal("WP-09", "weak", "+", [pla.fact_id], `Plaintiff in ${plaCount} collection case(s) all-time${civilDef ? ` (vs ${civilDef} as defendant)` : ""}${ex ? `; example claim ${ex}` : ""} — actively enforces its own receivables.` + NAME_MATCHED));
   }
   if (def) {
     const yr = yearIn(def.value);
@@ -176,8 +176,8 @@ function deriveSignals(facts: Fact[]): Signal[] {
     if (net >= 1 && d > 0) {
       const base = (payDef >= 5 || net >= 10 ? -15 : net >= 3 ? -12 : -10) * d;
       const desc = payDef > 0
-        ? `Net debt/litigation target: ${civilDef} civil + ${payDef} payment-order case(s) vs ${plaCount} as plaintiff`
-        : `Net litigation target: ${civilDef} case(s) as defendant vs ${plaCount} as plaintiff`;
+        ? `Net debt/litigation target (all-time): ${civilDef} civil + ${payDef} payment-order case(s) vs ${plaCount} as plaintiff`
+        : `Net litigation target (all-time): ${civilDef} case(s) as defendant vs ${plaCount} as plaintiff`;
       const ex = claimOf(def.value);
       out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `${desc}${yr ? `, most recent ${yr}` : ""}${ex ? `; example claim ${ex}` : ""}.` + NAME_MATCHED, base));
     } else if (net >= 1 && target === 1) {

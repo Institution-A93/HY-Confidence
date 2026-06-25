@@ -75,6 +75,11 @@ const NUM = String.raw`\d{1,3}(?:[ .,]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})
 // trailing digits and lands on the real «… ՀՀ դրամ» amount. Genitive «դրամի» (payment orders) still matches.
 const CCY = String.raw`ՀՀ\s*դրամ(?!ային)|ԱՄՆ\s*դոլար|դրամ(?!ային)|դոլար`;
 const CLAIM_RE = new RegExp(`(${NUM})\\D{0,80}?(${CCY})`);
+// Below this, a parsed "claim" is really a state duty / law-article ref / stray fragment, not the
+// principal demand. Verified: a plaintiff petitum with no «բռնագանձ» verb (Apaven case ԵԴ2/0105/02/25)
+// scanned from the start and yielded "150 դրամ" — nonsensical as a cargo carrier's claim. This is a
+// DISPLAY example only, so dropping a sub-threshold figure (show nothing) beats showing "150 AMD".
+const CLAIM_MIN_AMD = 1000;
 export function parseClaimAmount(raw: string): string {
   const t = (raw || "").replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
   if (!t) return "";
@@ -84,6 +89,7 @@ export function parseClaimAmount(raw: string): string {
   if (!m) return "";
   const code = /դոլար/.test(m[2]) ? "USD" : "AMD";
   const num = m[1].replace(/[.,]\d{2}$/, ""); // drop a trailing lumas/cents group; keep digit grouping as-is
+  if (Number(num.replace(/\D/g, "")) < CLAIM_MIN_AMD) return ""; // fee/duty/fragment, not a real claim
   return `${num} ${code}`;
 }
 
@@ -421,7 +427,7 @@ export const datalexAdapter: SourceAdapter = {
             subject: name,
             domain: "court",
             field: "defendant_cases",
-            value: `Defendant: ${parts.join(", ")}${yr ? `; most recent ${yr}` : ""}${claim ? `; claim e.g. ${claim}` : ""} (${rows[0]?.case_number || "—"})`,
+            value: `Defendant: ${parts.join(", ")} (all-time)${yr ? `; most recent ${yr}` : ""}${claim ? `; claim e.g. ${claim}` : ""} (${rows[0]?.case_number || "—"})`,
             source: this.source,
             url: "", // disabled ↗ — case_id link opens the search app, not the (captcha-gated) case
             fetched_at: now,
@@ -438,7 +444,7 @@ export const datalexAdapter: SourceAdapter = {
             subject: name,
             domain: "court",
             field: "plaintiff_cases",
-            value: `Plaintiff in ${pla.count} civil case(s)${yr ? `; most recent ${yr}` : ""}${claim ? `; claim e.g. ${claim}` : ""}`,
+            value: `Plaintiff in ${pla.count} civil case(s) (all-time)${yr ? `; most recent ${yr}` : ""}${claim ? `; claim e.g. ${claim}` : ""}`,
             source: this.source,
             url: "", // disabled ↗ — see caseUrl note
             fetched_at: now,
@@ -458,7 +464,7 @@ export const datalexAdapter: SourceAdapter = {
             subject: name,
             domain: "court",
             field: "bankruptcy_cases",
-            value: `Debtor in ${bkr.count} bankruptcy case(s)${yr ? `; most recent ${yr}` : ""}${outcome !== "unknown" ? `; verdict: ${outcome}` : ""} (${bkr.rows[0]?.case_number || "—"})`,
+            value: `Debtor in ${bkr.count} bankruptcy case(s) (all-time)${yr ? `; most recent ${yr}` : ""}${outcome !== "unknown" ? `; verdict: ${outcome}` : ""} (${bkr.rows[0]?.case_number || "—"})`,
             source: this.source,
             url: "", // disabled ↗ — see caseUrl note
             fetched_at: now,

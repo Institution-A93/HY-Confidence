@@ -93,6 +93,12 @@ describe("parseClaimAmount (demanded sum from the petitum)", () => {
     expect(parseClaimAmount("խնդրում ենք տրամադրել կատարողական թերթ")).toBe("");
     expect(parseClaimAmount("")).toBe("");
   });
+  it("drops a sub-threshold figure (fee / state duty / fragment), not a real claim", () => {
+    // real Apaven plaintiff petitum (no «բռնագանձ» verb) scanned from start → a stray "150 դրամ".
+    expect(parseClaimAmount("ղեկավարվելով ՀՀ ... 120-122-րդ հոդվածների դրույթներով ԽՆԴՐՈՒՄ ԵՆՔ ... 150 ՀՀ դրամ")).toBe("");
+    expect(parseClaimAmount("բռնագանձել 500 ՀՀ դրամ")).toBe(""); // below the 1000 AMD floor
+    expect(parseClaimAmount("բռնագանձել 1 500 ՀՀ դրամ")).toBe("1 500 AMD"); // above the floor — kept
+  });
 });
 
 describe("parseBankruptcyOutcome (operative verdict only)", () => {
