@@ -13,7 +13,7 @@ import { mxAdapter } from "../src/adapters/mx";
 import { srcAdapter, resolveBySrc } from "../src/adapters/srcam";
 import { azdararAdapter } from "../src/adapters/azdarar";
 import { datalexAdapter } from "../src/adapters/datalex";
-import { eregisterAdapter, ownerNamesFromValue } from "../src/adapters/eregister";
+import { eregisterAdapter, ownerNamesFromValue, parseOwnerLine } from "../src/adapters/eregister";
 import { pledgeAdapter } from "../src/adapters/pledge";
 import { procurementAdapter } from "../src/adapters/procurement";
 import { enforcementAdapter } from "../src/adapters/enforcement";
@@ -223,13 +223,29 @@ function buildNarrative(signals: Signal[], facts: Fact[], verified: number, sour
   if (ownerScreen && /no matches/i.test(ownerScreen.value)) lines.push({ text: "Beneficial owners screened against OFAC — no match.", evidence: [ownerScreen.fact_id], i18n: [P("nar_owners_screened_clean")] });
   // Surface beneficial owners prominently. They carry no scored signal (ownership transparency is
   // context, not a risk weight), so without this they would sit only in the collapsed facts list.
-  // (Owners/pledge lines are FACT values — still English; their i18n lands with the facts-table pass.)
+  // Localize the scaffolding ("declared …/since …"); the owner display (name + transliteration +
+  // share) is DATA and stays verbatim inside the {who} param.
   const owners = facts.find((fct) => fct.catalog_id === "F-REG-07");
-  if (owners) lines.push({ text: owners.value, evidence: [owners.fact_id] });
+  if (owners) {
+    const parsed = parseOwnerLine(owners.value);
+    const pieces: I18nPiece[] = [P("nar_owners_head", { date: parsed.date })];
+    parsed.owners.forEach((o, i) => {
+      if (i > 0) pieces.push(P("nar_list_sep"));
+      pieces.push(o.since ? P("nar_owner_since", { who: o.who, year: o.since }) : P("nar_owner_nosince", { who: o.who }));
+    });
+    lines.push({ text: owners.value, evidence: [owners.fact_id], i18n: pieces });
+  }
   // Surface pledges as context when they did not trip SN-06 (mature-entity working-capital pledges
   // are neutral per R-05, but still worth showing) — otherwise they'd sit only in the facts list.
   const pledge = facts.find((fct) => fct.catalog_id === "F-PLG-01");
-  if (pledge && !signals.some((s) => s.id === "SN-06")) lines.push({ text: pledge.value, evidence: [pledge.fact_id] });
+  if (pledge && !signals.some((s) => s.id === "SN-06")) {
+    const n = Number((pledge.value.match(/^(\d+)/) || [])[1] || 0);
+    const date = (pledge.value.match(/most recent (\d{2}-\d{2}-\d{4})/) || [])[1] || "";
+    const cred = (pledge.value.match(/\(creditor: (.+)\)\s*$/) || [])[1] || ""; // creditor names = DATA, kept verbatim
+    const pieces: I18nPiece[] = [P("nar_pledge", { n, date })];
+    if (cred) pieces.push(P("nar_pledge_creditor", { creditors: cred }));
+    lines.push({ text: pledge.value, evidence: [pledge.fact_id], i18n: pieces });
+  }
   lines.push({
     text: `Live check covered ${verified} of 10 domains (${sourcesText}). Auction is not wired yet — treat this as a partial read.`,
     evidence: [],

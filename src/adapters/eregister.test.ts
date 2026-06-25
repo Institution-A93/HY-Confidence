@@ -2,7 +2,7 @@
 // tools/smoke-adapters.ts; here we pin the HTML extraction that turns a BO declaration into
 // structured beneficial owners (the part that breaks silently if the page markup drifts).
 import { describe, it, expect } from "vitest";
-import { extractCompanyId, extractDeclarationLinks, parseDeclaration, ownerNamesFromValue } from "./eregister";
+import { extractCompanyId, extractDeclarationLinks, parseDeclaration, ownerNamesFromValue, parseOwnerLine } from "./eregister";
 
 describe("extractCompanyId", () => {
   it("pulls the company id from a search result link", () => {
@@ -61,5 +61,25 @@ describe("ownerNamesFromValue (UBO names back out of an F-REG-07 value, for sanc
   it("handles a missing share (—) and a missing transliteration paren", () => {
     const value = "Beneficial owners (declared 01/01/2025): Անի Հակոբյան —; Արամ Պետրոսյան 100%, since 2020";
     expect(ownerNamesFromValue(value)).toEqual(["Անի Հակոբյան", "Արամ Պետրոսյան"]);
+  });
+});
+
+describe("parseOwnerLine (split an F-REG-07 value for localization; owner display stays verbatim)", () => {
+  it("splits the declaration date and per-owner display + since-year", () => {
+    const v = "Beneficial owners (declared 19/02/2026): Դավիթ Սուքիասյան (davit suqiasyan) 100%, since 2010";
+    expect(parseOwnerLine(v)).toEqual({
+      date: "19/02/2026",
+      owners: [{ who: "Դավիթ Սուքիասյան (davit suqiasyan) 100%", since: "2010" }],
+    });
+  });
+  it("handles multiple owners and a missing since-year", () => {
+    const v = "Beneficial owners (declared 14/01/2026): Միքայել Վարդանյան 50%, since 2014; Կարեն Վարդանյան 50%";
+    expect(parseOwnerLine(v)).toEqual({
+      date: "14/01/2026",
+      owners: [
+        { who: "Միքայել Վարդանյան 50%", since: "2014" },
+        { who: "Կարեն Վարդանյան 50%", since: "" },
+      ],
+    });
   });
 });

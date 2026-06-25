@@ -107,6 +107,24 @@ export function ownerNamesFromValue(value: string): string[] {
     .filter(Boolean);
 }
 
+// Split an F-REG-07 value into the declaration date + per-owner display segments, so the narrative
+// can be localized (the scaffolding "declared …/since …" translates; the owner display — name,
+// transliteration, share — is DATA and stays verbatim). Parses our own ownerSummary format; unit-tested.
+export function parseOwnerLine(value: string): { date: string; owners: { who: string; since: string }[] } {
+  const date = (value.match(/\(declared ([^)]+)\)/) || [])[1] || "";
+  const colon = value.indexOf("):");
+  const list = colon >= 0 ? value.slice(colon + 2) : "";
+  const owners = list
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((seg) => {
+      const m = seg.match(/^(.*?)(?:,\s*since\s+(\d{4}))?\s*$/);
+      return { who: (m?.[1] || seg).trim(), since: m?.[2] || "" };
+    });
+  return { date, owners };
+}
+
 function ownerSummary(o: Owner): string {
   const lat = translitHyToLatin(o.name);
   const latPart = lat && lat.toLowerCase() !== o.name.toLowerCase() ? ` (${lat})` : "";
