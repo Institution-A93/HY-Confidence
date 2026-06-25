@@ -19,7 +19,7 @@ import { procurementAdapter } from "../src/adapters/procurement";
 import { enforcementAdapter } from "../src/adapters/enforcement";
 import { resilientFetch, TtlCache, CircuitBreaker } from "../src/lib/fetcher";
 import { COVERAGE_DOMAINS } from "../src/lib/adapter";
-import { stripLegal } from "../src/lib/normalize";
+import { stripLegal, translitHyToLatin } from "../src/lib/normalize";
 import type { AdapterResult, Subject } from "../src/lib/adapter";
 import { computeVerdict } from "../src/scoring/engine";
 import { baseWeightFor, enforcementWeight } from "../src/scoring/weights";
@@ -267,7 +267,11 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
   const signals = deriveSignals(facts);
   const eng = computeVerdict({ signals, facts, coverage, fuzzyResolution: false });
 
-  const name = input.entity_name || input.website || input.tin || "Counterparty";
+  // The registered name as src.am returned it (F-TAX-01 = "«NAME» — TIN <n>"). When the user typed
+  // ONLY a TIN, fall back to this resolved name for the dossier title — NOT the raw TIN number.
+  const resolvedName = taxVal.includes(" — TIN") ? taxVal.split(" — TIN")[0].trim() : "";
+  const nameHy = input.entity_name || resolvedName || input.website || input.tin || "Counterparty";
+  const nameEn = input.entity_name || (resolvedName ? translitHyToLatin(resolvedName) : "") || input.website || input.tin || "Counterparty";
   // A non-blocking "possible" sanctions match surfaces as a review gap (the strong match already
   // vetoed via B-05 in deriveSignals; this is the soft path that must NOT block).
   const missing = [{ gap: "Auction not checked live", cta: "Manual check recommended", mock: false }];
@@ -283,7 +287,7 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
       person_first_name: input.person_first_name || null,
       phone: input.phone || null,
     },
-    resolution: { ambiguous: false, candidates_reserve: [], selected: { tin: input.tin || "—", name_hy: name, name_en: name } },
+    resolution: { ambiguous: false, candidates_reserve: [], selected: { tin: resolvedTin || input.tin || "—", name_hy: nameHy, name_en: nameEn } },
     facts,
     signals: eng.signals,
     rules_fired: eng.rulesFired.map((id) => ({ id, effect: "applied", note: "" })),
