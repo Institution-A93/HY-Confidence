@@ -10,6 +10,8 @@ import { eregisterAdapter } from "../src/adapters/eregister.ts";
 import { pledgeAdapter } from "../src/adapters/pledge.ts";
 import { procurementAdapter } from "../src/adapters/procurement.ts";
 import { enforcementAdapter } from "../src/adapters/enforcement.ts";
+import { resolveBySrc } from "../src/adapters/srcam.ts";
+import { screenOwners } from "../src/adapters/sanctions.ts";
 import type { Subject } from "../src/lib/adapter.ts";
 
 const now = () => new Date().toISOString();
@@ -57,6 +59,18 @@ await run("Procurement — Regard Travel TIN 02252505 (expect F-PRC-01 win, exac
 // token/captcha/POST pipe. Swap in a known debtor's TIN to see F-ENF-01 + the REMS structure.
 await run("Enforcement — Grand Candy TIN 02226764 (expect clean / verified_empty)", () =>
   enforcementAdapter.fetch({ tin: "02226764" }, now()),
+);
+
+// spyur fallback: a Latin name whose Armenian spelling is phonetic (Mining → Մայնինգ). The direct
+// transliteration search misses it; the DDG-Lite/spyur fallback re-keys src.am → expect «ՄԼ ՄԱՅՆԻՆԳ»
+// (TIN 02569362) at the top.
+await run("Resolve — ML Mining (Latin, expect spyur fallback → 02569362 «ՄԼ ՄԱՅՆԻՆԳ»)", () =>
+  resolveBySrc("ML Mining", 3),
+);
+// Owner screening: screen a real beneficial-owner person name against OFAC (expect clean) and a
+// sanctioned name (expect a strong hit) — the UBO path that gives single-token-named firms a status.
+await run("Owner screen — [Դավիթ Սուքիասյան] clean + [Vladimir Putin] strong", () =>
+  screenOwners(["Դավիթ Սուքիասյան", "Vladimir Putin"]),
 );
 
 console.log("\nsmoke done.");

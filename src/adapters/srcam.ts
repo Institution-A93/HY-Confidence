@@ -7,6 +7,7 @@ import type { AdapterResult, SourceAdapter, Subject } from "../lib/adapter";
 import { makeFact } from "../lib/adapter";
 import type { Candidate } from "../types";
 import { hasArmenian, toLatinTokens, latinToArmenian, translitHyToLatin, nameSimilarity } from "../lib/normalize";
+import { spyurNameCandidates } from "./spyur";
 
 const HOST = "src.am";
 const PAGE = "/en/taxpayerSearchSystemPage/112";
@@ -131,9 +132,26 @@ export async function resolveBySrc(name: string, max = 8): Promise<Candidate[]> 
     if (byTin.size > 400) break;
   }
 
-  const result = Array.from(byTin.values())
-    .map((rec) => ({ rec, score: nameSimilarity(q, rec.name) }))
-    .sort((a, b) => b.score - a.score)
+  const rank = () => Array.from(byTin.values()).map((rec) => ({ rec, score: nameSimilarity(q, rec.name) })).sort((a, b) => b.score - a.score);
+  let scored = rank();
+
+  // Phonetic-divergence fallback (Latin input only). A weak top score means the transliteration
+  // search never surfaced the record — typically because an English word was registered by Armenian
+  // phonetics our letter map can't predict (Mining → Մայնինգ). Ask the spyur directory for the
+  // Armenian name, re-query src.am with it, and re-rank. Degrades to the direct results if the SE
+  // is unreachable. See spyur.ts. Threshold 0.6 ≈ "no candidate is even close".
+  if (!hasArmenian(q) && (scored[0]?.score ?? 0) < 0.6) {
+    for (const armName of (await spyurNameCandidates(q)).slice(0, 2)) {
+      try {
+        for (const rec of await searchPaged(session, armName, 6)) byTin.set(rec.tin, rec);
+      } catch {
+        /* skip a failed directory-derived sub-query */
+      }
+    }
+    scored = rank();
+  }
+
+  const result = scored
     .slice(0, max)
     .map(({ rec }) => ({
       tin: rec.tin,

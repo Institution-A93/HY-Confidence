@@ -29,7 +29,7 @@ datacenter IP reaches them fine — the "foreign IP" worry does not apply to gov
 | armeps.am (procurement) | ✅ 200, Tomcat | reachable |
 | gnumner.am (procurement) | ✅ 200 (with `-k`) | **expired TLS cert** — disable cert check for this host |
 | ajurd.am (auctions) | ✅ 200, Apache | reachable |
-| spyur.am (directory) | ⚠️ 403 Cloudflare "Just a moment" | behind CF bot-challenge → use the search-engine fallback (`"<phone>" site:spyur.am`) or headless; anticipated |
+| spyur.am (directory) | ⚠️ Cloudflare (every GET 302→`/en/error`) | ✅ BUILT around it — DuckDuckGo-Lite SE-fallback for Latin→Armenian name (`src/adapters/spyur.ts`); see section below |
 | e-services.moj.am | 200 but empty/Access-denied | not needed — e-register.am is the registry surface |
 
 **Implications for the build:** gov scrapers can run from the droplet over plain HTTP — no
@@ -250,6 +250,25 @@ Facts: F-PLG-01 movable pledges (→ SN-06, R-05). Adapter: `src/adapters/pledge
   follow-up signal. Same token-containment guard as datalex (debtor field can list co-debtors).
   Empty grid → `warning_box`/"…չեն գտնվել…" → verified_empty (R-09 distinguishable). Name-keyed →
   `match:"fuzzy"` (R-08 ×0.7); de-fuzz via the state-registry-number field is a follow-up.
+
+## spyur.am — business directory (name resolution, not a Fact source) · ✅ BUILT & LIVE (recon 2026-06-25)
+Adapter: `src/adapters/spyur.ts`. Used by the src.am resolver (`resolveBySrc`) as a phonetic-divergence
+fallback for LATIN input — it emits no Facts and never blocks.
+- **Why:** an English word in a company name is registered by Armenian PHONETICS, which our letter-map
+  transliterator cannot predict. "ML Mining" is «ՄԼ ՄԱՅՆԻՆԳ» (Mining → Մայնինգ / "Mayning"), but
+  `latinToArmenian("mining")` = «մինինգ» → the src.am substring search returns 0 of the real record.
+  Verified: `resolveBySrc("ML Mining")` returned only namesake "Hamlet Min…" individuals; once the
+  Armenian name is supplied, src.am returns TIN 02569362 «ՄԼ ՄԱՅՆԻՆԳ» as the #1 hit.
+- **CF wall confirmed (2026-06-25):** every direct GET to `www.spyur.am` 302s to `/en/error` (no bot
+  clearance) — so no direct scrape without a headless CF-solver.
+- **The path that works:** `GET lite.duckduckgo.com/lite/?q=<name> spyur.am`. DDG-Lite returns spyur
+  result rows whose Armenian-language title carries the «…» company name verbatim
+  (`«ՄԼ ՄԱՅՆԻՆԳ» • ՀԱՅԱՍՏԱՆ (ԵՐԵՎԱՆ) • ՍՓՅՈՒՌ`). `extractSpyurNames` pulls the «…» group (naturally
+  ignores the straight-quote English row), and the resolver re-keys src.am with it.
+- **Trigger (keeps it cheap + safe):** only when the direct transliteration search's top
+  `nameSimilarity` < 0.6 AND the input is Latin — so a good direct match (Grand Candy → «ԳՐԱՆԴ ՔԵՆԴԻ»)
+  never incurs the SE round-trip. ⚠ DDG-Lite is a fragile dependency (rate-limit / markup drift); the
+  fallback degrades to the direct (weak) results on any failure — no regression, but recall not guaranteed.
 
 ---
 
