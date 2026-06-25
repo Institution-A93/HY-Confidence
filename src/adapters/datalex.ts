@@ -296,6 +296,21 @@ export function partyMatchesQuery(partyField: string, queryKey: string): boolean
   });
 }
 
+// BANKRUPTCY-ONLY stricter check: is the queried entity the SOLE respondant (= the actual debtor)?
+// On the bankruptcy tab the respondant is the party to be declared bankrupt — but the field can be a
+// COMMA-SEPARATED LIST of co-respondents. Verified live: an individual's case names every creditor
+// BANK as a co-respondent (e.g. «Յունիբանկ» ԲԲԸ, «Ինեկոբանկ» ՓԲԸ, «Արդշինբանկ» ՓԲԸ, …). partyMatchesQuery
+// would then tag each listed bank as "debtor in bankruptcy" → a FALSE B-01 veto on a solvent entity
+// (latent: harmless only because those cases were >4y; a recent one would wrongly BLOCK). A genuine
+// corporate bankruptcy has the debtor as the SOLE respondant, so require exactly one party.
+export function isSoleParty(partyField: string, queryKey: string): boolean {
+  if (!queryKey) return false;
+  const parts = partyField.split(/[,،;]/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length !== 1) return false;
+  const k = nameKey(parts[0]);
+  return k === queryKey || (k.startsWith(queryKey) && k.length - queryKey.length <= 4);
+}
+
 interface Guarded {
   count: number;
   rows: Row[];
@@ -304,9 +319,12 @@ interface Guarded {
 // Filter a result to rows that really concern the queried entity, then project the full totalCount
 // through the observed keep-ratio (datalex returns the true totalCount but only one page of rows).
 // When totalCount ≤ the page we fetched, the guarded count is exact.
-function applyGuard(res: NamedResult, side: "respondant_name" | "claimant_name"): Guarded {
+function applyGuard(res: NamedResult, side: "respondant_name" | "claimant_name", requireSole = false): Guarded {
   const key = nameKey(res.usedName);
-  const rows = res.rows.filter((r) => partyMatchesQuery(r[side] || "", key));
+  // requireSole (bankruptcy only): the entity must be the ONLY respondant to count as the debtor —
+  // a co-respondent (e.g. a creditor bank in an individual's case) is not the bankrupt. See isSoleParty.
+  const matches = requireSole ? isSoleParty : partyMatchesQuery;
+  const rows = res.rows.filter((r) => matches(r[side] || "", key));
   const count = res.rows.length === 0 ? 0 : res.totalCount <= res.rows.length ? rows.length : Math.round((res.totalCount * rows.length) / res.rows.length);
   return { count, rows };
 }
@@ -376,7 +394,7 @@ export const datalexAdapter: SourceAdapter = {
       // co-parties and same-substring namesakes like «Ապավեն Տերմինալ»), and scale the count.
       const def = applyGuard(defR, "respondant_name");
       const pla = applyGuard(plaR, "claimant_name");
-      const bkr = applyGuard(bkrR, "respondant_name");
+      const bkr = applyGuard(bkrR, "respondant_name", true); // sole-respondent only — drop co-respondent creditor banks → no false bankruptcy/B-01
       const pay = applyGuard(payR, "respondant_name");
       // Court facts are ALWAYS name-matched: datalex has no TIN field, so even a TIN-resolved subject's
       // cases are found by name and can include a same-name entity (e.g. an active and a liquidated

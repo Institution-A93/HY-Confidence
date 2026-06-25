@@ -2,7 +2,7 @@
 // by tools/smoke-adapters.ts against the live portal; the deterministic suite tests only the
 // parsing helpers that turn grid rows into the recency signal.
 import { describe, it, expect } from "vitest";
-import { mostRecentCaseYear, caseUrl, nameKey, partyMatchesQuery, parseClaimAmount, parseBankruptcyOutcome } from "./datalex";
+import { mostRecentCaseYear, caseUrl, nameKey, partyMatchesQuery, isSoleParty, parseClaimAmount, parseBankruptcyOutcome } from "./datalex";
 
 describe("mostRecentCaseYear", () => {
   it("parses the 2-digit year suffix of Armenian case numbers", () => {
@@ -46,6 +46,20 @@ describe("token-containment guard", () => {
     const gc = nameKey("Գրանդ Քենդի");
     expect(partyMatchesQuery("Գրանդ Քենդի ՍՊԸ", gc)).toBe(true);
     expect(partyMatchesQuery("Գրանդ Տոբակո ՍՊԸ", gc)).toBe(false);
+  });
+});
+
+describe("isSoleParty (bankruptcy debtor = sole respondant only)", () => {
+  const ineco = nameKey("Ինեկոբանկ");
+  it("accepts the entity when it is the only respondant (a genuine debtor)", () => {
+    expect(isSoleParty("«Ինեկոբանկ» ՓԲԸ", ineco)).toBe(true);
+  });
+  it("REJECTS the entity when it is one of several co-respondents (a creditor bank, not the bankrupt)", () => {
+    // real case ԱՐԴ/0046/04/18: an individual's petition naming every creditor bank as a co-respondent.
+    const field = "«Յունիբանկ» ԲԲԸ, «Ինեկոբանկ» ՓԲԸ, «Հայէկոնոմբանկ» ԲԲԸ, «ՎՏԲ Հայաստան բանկ» ՓԲԸ, «Գուդկրեդիտ» ՈւՎԿ ՓԲԸ";
+    expect(isSoleParty(field, ineco)).toBe(false);
+    // ...whereas the loose guard would have wrongly matched it → false "debtor in bankruptcy"
+    expect(partyMatchesQuery(field, ineco)).toBe(true);
   });
 });
 
