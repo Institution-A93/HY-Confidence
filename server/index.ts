@@ -7,18 +7,18 @@
 // (wide band) by construction — the registry/court/etc. scrapers need a backend per
 // recon/SOURCES-RECON.md. Run with: npx tsx server/index.ts
 import { createServer } from "node:http";
-import { sanctionsAdapter } from "../src/adapters/sanctions";
+import { sanctionsAdapter, screenOwners } from "../src/adapters/sanctions";
 import { whoisAdapter } from "../src/adapters/whois";
 import { mxAdapter } from "../src/adapters/mx";
 import { srcAdapter, resolveBySrc } from "../src/adapters/srcam";
 import { azdararAdapter } from "../src/adapters/azdarar";
 import { datalexAdapter } from "../src/adapters/datalex";
-import { eregisterAdapter } from "../src/adapters/eregister";
+import { eregisterAdapter, ownerNamesFromValue } from "../src/adapters/eregister";
 import { pledgeAdapter } from "../src/adapters/pledge";
 import { procurementAdapter } from "../src/adapters/procurement";
 import { enforcementAdapter } from "../src/adapters/enforcement";
 import { resilientFetch, TtlCache, CircuitBreaker } from "../src/lib/fetcher";
-import { COVERAGE_DOMAINS } from "../src/lib/adapter";
+import { COVERAGE_DOMAINS, makeFact } from "../src/lib/adapter";
 import { stripLegal, translitHyToLatin } from "../src/lib/normalize";
 import type { AdapterResult, Subject } from "../src/lib/adapter";
 import { computeVerdict } from "../src/scoring/engine";
@@ -54,11 +54,12 @@ function deriveSignals(facts: Fact[]): Signal[] {
 
   const NM = P("sig_name_matched"); // shared court "matched by name" suffix piece
 
-  const san = f("F-SAN-01");
-  // Only a STRONG (confident) sanctions name match vetoes. A "Possible OFAC match" is surfaced as
-  // a manual-review CTA in runCheck — it must never auto-BLOCK on a coincidence of common words.
-  if (san && /sanctions match \(strong\)/i.test(san.value)) {
-    out.push(mkSignal("B-05", "blocker", "-", [san.fact_id], "Director/UBO appears on the OFAC sanctions list (strong name match).", undefined, [P("sig_b05")]));
+  // Only a STRONG (confident) sanctions match vetoes — on the entity name (F-SAN-01) OR a
+  // beneficial owner (F-SAN-02, the spec's UBO screen). A "Possible OFAC match" is surfaced as a
+  // manual-review CTA in runCheck — it must never auto-BLOCK on a coincidence of common words.
+  const sanStrong = facts.find((x) => /^F-SAN-0[12]$/.test(x.catalog_id) && /sanctions match \(strong\)/i.test(x.value));
+  if (sanStrong) {
+    out.push(mkSignal("B-05", "blocker", "-", [sanStrong.fact_id], "Director/UBO appears on the OFAC sanctions list (strong name match).", undefined, [P("sig_b05")]));
   }
 
   const web = f("F-WEB-01");
@@ -216,6 +217,10 @@ function buildNarrative(signals: Signal[], facts: Fact[], verified: number, sour
   // "we checked OFAC and it's clean" is invisible (the user asked why nothing shows for a clean entity).
   const san = facts.find((fct) => fct.catalog_id === "F-SAN-01");
   if (san && /no matches/i.test(san.value)) lines.push({ text: "OFAC sanctions screened — no match.", evidence: [san.fact_id], i18n: [P("nar_sanctions_clean")] });
+  // Same for the beneficial-owner screen (F-SAN-02) — for single-token-named entities this is the
+  // ONLY sanctions result (the entity-name screen declined), so it must be visible when clean.
+  const ownerScreen = facts.find((fct) => fct.catalog_id === "F-SAN-02");
+  if (ownerScreen && /no matches/i.test(ownerScreen.value)) lines.push({ text: "Beneficial owners screened against OFAC — no match.", evidence: [ownerScreen.fact_id], i18n: [P("nar_owners_screened_clean")] });
   // Surface beneficial owners prominently. They carry no scored signal (ownership transparency is
   // context, not a risk weight), so without this they would sit only in the collapsed facts list.
   // (Owners/pledge lines are FACT values — still English; their i18n lands with the facts-table pass.)
@@ -236,6 +241,7 @@ function buildNarrative(signals: Signal[], facts: Fact[], verified: number, sour
 const DOMAIN_LABEL: Record<string, string> = { tax: "tax", registry: "registry", web: "web/domain", contact: "contact", notice: "notices", court: "courts", pledge: "pledges", procurement: "procurement", enforcement: "enforcement" };
 
 async function runCheck(input: Record<string, string>): Promise<Fixture> {
+  const now = new Date().toISOString();
   const subject: Subject = {
     tin: input.tin || undefined,
     name: input.entity_name || undefined,
@@ -266,6 +272,40 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
   const results = [srcRes, ...rest];
   const facts = results.flatMap((r) => r.facts);
 
+  // Sanctions screening of beneficial OWNERS (UBOs) — source-access-spec §1–2/§11, the spec's
+  // intended director/UBO screen. Owners (F-REG-07) only resolve after the keyed adapters run, so
+  // this is a post-step here, not inside an adapter (it also keeps the one-network-call-per-adapter
+  // contract intact). It is what lets a single-token-named company (ML Mining, Inecobank) show a
+  // sanctions status at all: the company name can't be screened, but its OWNER names have ≥2 tokens.
+  const ownersFact = facts.find((ff) => ff.catalog_id === "F-REG-07");
+  if (ownersFact) {
+    try {
+      const screen = await screenOwners(ownerNamesFromValue(ownersFact.value));
+      if (screen) {
+        const fmt = (h: { name: string; matches: string[] }) => `${h.name} → ${h.matches.join(", ")}`;
+        let value: string;
+        if (screen.strong.length) value = `OFAC sanctions match (strong) on beneficial owner: ${screen.strong.map(fmt).join("; ")}`;
+        else if (screen.possible.length) value = `Possible OFAC match on beneficial owner — manual review: ${screen.possible.map(fmt).join("; ")}`;
+        else value = `Beneficial owners screened — no matches (OFAC SDN): ${screen.screened.join("; ")}`;
+        facts.push(
+          makeFact({
+            catalog_id: "F-SAN-02",
+            subject: ownersFact.subject,
+            domain: "sanctions",
+            field: "owner_screening",
+            value,
+            source: "OFAC SDN",
+            url: "", // OFAC search is a JS/POST app with no replayable per-name GET URL (disabled ↗)
+            fetched_at: now,
+            match: ownersFact.match, // owners are TIN-confirmed; the OFAC name-match strength lives in strong/possible
+          }),
+        );
+      }
+    } catch {
+      // OFAC list could not be loaded → emit NO owner-screening fact ("could not query", not "clean").
+    }
+  }
+
   // Coverage = domains that produced facts OR were queried successfully (queried-empty still
   // counts as covered; one adapter like src.am spans several coverage domains).
   const present = new Set<string>();
@@ -289,7 +329,7 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
   // A non-blocking "possible" sanctions match surfaces as a review gap (the strong match already
   // vetoed via B-05 in deriveSignals; this is the soft path that must NOT block).
   const missing = [{ gap: "Auction not checked live", cta: "Manual check recommended", mock: false, gap_i18n: [P("miss_auction")], cta_i18n: [P("miss_cta_manual")] }];
-  if (facts.some((ff) => ff.catalog_id === "F-SAN-01" && /Possible OFAC match/i.test(ff.value)))
+  if (facts.some((ff) => /^F-SAN-0[12]$/.test(ff.catalog_id) && /Possible OFAC match/i.test(ff.value)))
     missing.unshift({ gap: "Possible sanctions name match (unconfirmed)", cta: "Verify the counterparty name against the OFAC SDN list manually", mock: false, gap_i18n: [P("miss_sanctions")], cta_i18n: [P("miss_cta_sanctions")] });
   const fixture = {
     id: "live:" + (input.tin || input.entity_name || input.website || "q"),
@@ -307,7 +347,7 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
     rules_fired: eng.rulesFired.map((id) => ({ id, effect: "applied", note: "" })),
     verdict: {
       state: eng.state,
-      checked_at: new Date().toISOString(),
+      checked_at: now,
       blockers: eng.blockers,
       score: eng.score,
       coverage,

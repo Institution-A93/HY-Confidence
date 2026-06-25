@@ -2,7 +2,7 @@
 // tools/smoke-adapters.ts; here we pin the HTML extraction that turns a BO declaration into
 // structured beneficial owners (the part that breaks silently if the page markup drifts).
 import { describe, it, expect } from "vitest";
-import { extractCompanyId, extractDeclarationLinks, parseDeclaration } from "./eregister";
+import { extractCompanyId, extractDeclarationLinks, parseDeclaration, ownerNamesFromValue } from "./eregister";
 
 describe("extractCompanyId", () => {
   it("pulls the company id from a search result link", () => {
@@ -49,5 +49,17 @@ describe("parseDeclaration", () => {
 
   it("returns no owners for a declaration without a Section B", () => {
     expect(parseDeclaration("<div>Declaration date 01/01/2025</div><p>nothing</p>").owners).toHaveLength(0);
+  });
+});
+
+describe("ownerNamesFromValue (UBO names back out of an F-REG-07 value, for sanctions screening)", () => {
+  it("extracts the Armenian names, dropping the Latin paren, share and since-tail", () => {
+    const value =
+      "Beneficial owners (declared 14/01/2026): Միքայել Վարդանյան (Mikayel Vardanyan) 50%, since 2014; Կարեն Վարդանյան (Karen Vardanyan) 50%, since 2012";
+    expect(ownerNamesFromValue(value)).toEqual(["Միքայել Վարդանյան", "Կարեն Վարդանյան"]);
+  });
+  it("handles a missing share (—) and a missing transliteration paren", () => {
+    const value = "Beneficial owners (declared 01/01/2025): Անի Հակոբյան —; Արամ Պետրոսյան 100%, since 2020";
+    expect(ownerNamesFromValue(value)).toEqual(["Անի Հակոբյան", "Արամ Պետրոսյան"]);
   });
 });

@@ -62,6 +62,34 @@ export function screenOfac(queryName: string, ofacNames: string[]): { strong: st
   return { strong, possible };
 }
 
+// Screen beneficial-OWNER person names against OFAC — the spec's intended director/UBO screen
+// (source-access-spec §1–2 + §11). Owner names carry ≥2 tokens, so they screen cleanly where a
+// single-token COMPANY name can't (ML Mining → "mayning", Inecobank → "inekobank" both fall under
+// the MIN_SHARED_WORDS floor and yield no fact). Loads the OFAC list once (cached) and runs the
+// same strength-based screenOfac per owner. Returns null when there is nothing to screen; THROWS
+// if the list can't be loaded — the caller maps that to "could not query" (no fact), never a
+// false "clean".
+export interface OwnerScreen {
+  screened: string[]; // owner names actually screened
+  strong: { name: string; matches: string[] }[]; // block-worthy (→ B-05)
+  possible: { name: string; matches: string[] }[]; // manual-review only
+}
+export async function screenOwners(ownerNames: string[]): Promise<OwnerScreen | null> {
+  const names = Array.from(new Set(ownerNames.map((n) => n.trim()).filter(Boolean)));
+  if (!names.length) return null;
+  const ofac = await loadOfacNames();
+  const strong: { name: string; matches: string[] }[] = [];
+  const possible: { name: string; matches: string[] }[] = [];
+  for (const n of names) {
+    const r = screenOfac(n, ofac);
+    // Same thresholds as the entity-name adapter: a flood of weak matches (>MAX_POSSIBLE) is
+    // generic noise → treated as clean, not surfaced.
+    if (r.strong.length) strong.push({ name: n, matches: r.strong.slice(0, 3) });
+    else if (r.possible.length && r.possible.length <= MAX_POSSIBLE) possible.push({ name: n, matches: r.possible.slice(0, 3) });
+  }
+  return { screened: names, strong, possible };
+}
+
 function download(url: string, timeoutMs = 20000, redirects = 3): Promise<string> {
   return new Promise((resolve, reject) => {
     const req = get(url, { headers: { "User-Agent": UA, Accept: "text/csv,*/*" } }, (res) => {

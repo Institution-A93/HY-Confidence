@@ -89,6 +89,24 @@ export function parseDeclaration(declHtml: string): { date: string; owners: Owne
   return { date, owners };
 }
 
+// Owner person-names back out of an F-REG-07 value, for downstream UBO sanctions screening.
+// Parses OUR OWN ownerSummary format ("NAME (LAT) SHARE, since YYYY"), so it is stable and
+// unit-tested — not the fragile registry-HTML parsing parseDeclaration does. Keeps the Armenian
+// NAME (sanctions transliterates it); drops the Latin paren, the share and the "since" tail.
+export function ownerNamesFromValue(value: string): string[] {
+  const colon = value.indexOf("):"); // skip the "Beneficial owners (declared DATE):" prefix
+  const list = colon >= 0 ? value.slice(colon + 2) : value;
+  return list
+    .split(";")
+    .map((seg) =>
+      seg
+        .replace(/\([^)]*\)/g, " ") // drop the Latin transliteration paren
+        .replace(/\s+(?:\d+%|—).*$/, "") // drop the "SHARE, since YYYY" tail
+        .trim(),
+    )
+    .filter(Boolean);
+}
+
 function ownerSummary(o: Owner): string {
   const lat = translitHyToLatin(o.name);
   const latPart = lat && lat.toLowerCase() !== o.name.toLowerCase() ? ` (${lat})` : "";
