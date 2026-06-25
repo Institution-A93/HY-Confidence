@@ -112,6 +112,14 @@ describe("parseBankruptcyOutcome (operative verdict only)", () => {
   it("ignores procedural ՈՐՈՇԵՑ rulings (admit-to-proceedings is not a verdict)", () => {
     expect(parseBankruptcyOutcome("ՈՐՈՇԵՑԻ դիմումն ընդդեմ «X»՝ սնանկ ճանաչելու պահանջի մասին, ընդունել վարույթ:")).toBe("unknown");
   });
+  it("reads a TERMINATED/withdrawn case (no merits verdict) as terminated → suppresses B-01", () => {
+    // real ML Mining ՍնԴ/1315/04/26: applicants withdrew, proceedings terminated, no «ՎՃՌԵՑ».
+    expect(parseBankruptcyOutcome("ՈՐՈՇԵՑԻ Թիվ ՍնԴ/1315/04/26 սնանկության գործի վարույթը կարճել")).toBe("terminated");
+    expect(parseBankruptcyOutcome("սնանկության գործի վարույթը ենթակա է կարճման")).toBe("terminated");
+  });
+  it("a declared bankruptcy that also cites termination law stays declared (ՎՃՌԵՑ wins)", () => {
+    expect(parseBankruptcyOutcome("Վ Ճ Ռ Ե Ց «X» ՍՊԸ-ն սնանկ ճանաչել ... դեպքերում երբ վարույթը կարճվում է")).toBe("declared");
+  });
   it("returns unknown when there is no bankruptcy verdict", () => {
     expect(parseBankruptcyOutcome("some case text without a verdict")).toBe("unknown");
     expect(parseBankruptcyOutcome("")).toBe("unknown");

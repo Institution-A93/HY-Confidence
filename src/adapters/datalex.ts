@@ -181,7 +181,7 @@ const DETAIL_MIN_BYTES = 5000;
 // returns the captcha form again) AND a transient empty/error response (datalex intermittently omits
 // result.html) — earlier these short bodies were mistaken for an unlocked-but-empty detail → a false
 // "unknown" that the 6h cache then froze. The openCase→showCase shape is non-obvious (see recon).
-async function bankruptcyVerdict(cookie: string, row: Row): Promise<"rejected" | "declared" | "unknown"> {
+async function bankruptcyVerdict(cookie: string, row: Row): Promise<"rejected" | "declared" | "terminated" | "unknown"> {
   if (!process.env.CAPSOLVER_API_KEY) return "unknown";
   const ocFn = {
     appName: "AppCaseSearch", appPage: "default", moduleID: "Common/ModGrid", class: "", function: "openCase",
@@ -361,14 +361,19 @@ export function caseUrl(row: Row | undefined): string {
   return row?.case_external_id ? `https://${HOST}/?app=AppCaseSearch&case_id=${row.case_external_id}` : `https://${HOST}${SEARCH_PAGE}`;
 }
 
-// Read the bankruptcy outcome from a (captcha-solved) case-detail page. We parse ONLY the merits
-// VERDICT — the bankruptcy court's «Վ Ճ Ռ Ե Ց» (decided) operative clause — NOT the procedural
-// «ՈՐՈՇԵՑ» rulings (admit-to-proceedings / appeal decisions), which also mention «սնանկ ճանաչ» and
-// would mislead. In a verdict on a "declare bankrupt" petition: «…մերժել» = REJECTED (entity NOT
-// bankrupt → B-01 must not block); otherwise it granted it → DECLARED. "declared" wins if both appear
-// across verdicts (safe — keep the block); we only ACT on "rejected" (un-block). Conservative by
-// design: a false "rejected" would hide a real bankruptcy, so anything unclear stays "unknown".
-export function parseBankruptcyOutcome(detailHtml: string): "rejected" | "declared" | "unknown" {
+// Read the bankruptcy outcome from a (captcha-solved) case-detail page. Two terminal states mean the
+// entity is NOT bankrupt → B-01 must not block:
+//   • REJECTED — a merits verdict «Վ Ճ Ռ Ե Ց … մերժել» on the declare-bankrupt petition.
+//   • TERMINATED — the court CLOSED the proceedings without a merits verdict (applicants withdrew, a
+//     settlement, etc.) via a ruling «… գործի վարույթը կարճ(վում է)» and lifts all property
+//     restrictions. Verified live: ML Mining ՍնԴ/1315/04/26 — filed + accepted 27–30.03.2026, then
+//     terminated 31.03.2026 on the applicants' withdrawal; with no merits verdict the old parser
+//     returned "unknown" → a FALSE B-01 block on a healthy company.
+// We parse the merits «ՎՃՌԵՑ» clause first (NOT the procedural «ՈՐՈՇԵՑ» admit-to-proceedings ruling,
+// which also mentions «սնանկ ճանաչ»). A real declared bankruptcy carries «ՎՃՌԵՑ» and is caught there,
+// so the termination check runs only when there is NO merits verdict — it cannot hide a real
+// bankruptcy. Conservative: anything unclear stays "unknown" (keeps the recency-based B-01).
+export function parseBankruptcyOutcome(detailHtml: string): "rejected" | "declared" | "terminated" | "unknown" {
   const txt = detailHtml.replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ");
   const verdict = /[ՎV]\s?Ճ\s?Ռ\s?Ե\s?Ց/g; // «ՎՃՌԵՑ» — the merits verdict only
   let m: RegExpExecArray | null;
@@ -380,7 +385,11 @@ export function parseBankruptcyOutcome(detailHtml: string): "rejected" | "declar
     if (/մերժ/.test(seg)) rejected = true;
     else declared = true;
   }
-  return declared ? "declared" : rejected ? "rejected" : "unknown";
+  if (declared) return "declared";
+  if (rejected) return "rejected";
+  // No merits verdict → check for a proceedings-TERMINATION ruling («վարույթ … կարճ/դադարեց»).
+  if (/վարույթ[\s\S]{0,20}(կարճ|դադարեց)/.test(txt)) return "terminated";
+  return "unknown";
 }
 
 export const datalexAdapter: SourceAdapter = {
