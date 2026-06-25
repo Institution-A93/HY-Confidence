@@ -148,7 +148,6 @@ export const I18N: Record<LangCode, Dict> = {
 
     // --- live dossier: dynamic signal/narrative/missing pieces (server emits I18nPiece keys) ---
     sig_name_matched: " (matched by name, not TIN — may be a same-name entity)",
-    sig_ex_claim: "; example claim {amount}",
     sig_period: ".",
     sig_b05: "Director/UBO appears on the OFAC sanctions list (strong name match).",
     sig_wp01: "Domain registered {age} years ago — an established web presence.",
@@ -173,6 +172,7 @@ export const I18N: Record<LangCode, Dict> = {
     sig_wn07: "A single, dated defendant case (>24 months old).",
     sig_b01: "Appears as the debtor in a bankruptcy case (filed {yr}) — open insolvency proceedings.",
     nar_blocked: "BLOCKED: ",
+    nar_sanctions_clean: "OFAC sanctions screened — no match.",
     nar_coverage: "Live check covered {n} of 10 domains. Auction is not wired yet — treat this as a partial read.",
     miss_auction: "Auction not checked live",
     miss_cta_manual: "Manual check recommended",
@@ -323,7 +323,6 @@ export const I18N: Record<LangCode, Dict> = {
 
     // --- живое досье: динамические части сигналов/заключения (demo-grade, проверить с носителем) ---
     sig_name_matched: " (совпадение по названию, не по ИНН — возможно, однофамилец)",
-    sig_ex_claim: "; пример иска {amount}",
     sig_period: ".",
     sig_b05: "Директор/бенефициар фигурирует в санкционном списке OFAC (уверенное совпадение по имени).",
     sig_wp01: "Домен зарегистрирован {age} лет назад — устоявшееся веб-присутствие.",
@@ -348,6 +347,7 @@ export const I18N: Record<LangCode, Dict> = {
     sig_wn07: "Единичное давнее дело как ответчик (более 24 месяцев назад).",
     sig_b01: "Фигурирует как должник в деле о банкротстве (подано в {yr}) — открытое производство о несостоятельности.",
     nar_blocked: "ЗАБЛОКИРОВАНО: ",
+    nar_sanctions_clean: "Проверка по санкциям OFAC — совпадений нет.",
     nar_coverage: "Живая проверка охватила {n} из 10 областей. Аукционы пока не подключены — считайте это частичной проверкой.",
     miss_auction: "Аукционы не проверены вживую",
     miss_cta_manual: "Рекомендуется ручная проверка",
@@ -498,7 +498,6 @@ export const I18N: Record<LangCode, Dict> = {
 
     // --- կենդանի թղթապանակ. ազդանշանների/եզրակացության դինամիկ մասեր (demo-grade, ստուգել կրողի հետ) ---
     sig_name_matched: " (համընկնում անվամբ, ոչ ՀՎՀՀ-ով — հնարավոր է՝ համանուն ընկերություն)",
-    sig_ex_claim: "; հայցի օրինակ՝ {amount}",
     sig_period: "։",
     sig_b05: "Տնօրենը/շահառուն հայտնվում է OFAC պատժամիջոցների ցանկում (անվան վստահ համընկնում)։",
     sig_wp01: "Դոմեյնը գրանցվել է {age} տարի առաջ — կայացած վեբ-ներկայություն։",
@@ -523,6 +522,7 @@ export const I18N: Record<LangCode, Dict> = {
     sig_wn07: "Մեկ հին գործ՝ որպես պատասխանող (24 ամսից ավելի վաղ)։",
     sig_b01: "Հայտնվում է որպես պարտապան սնանկության գործում (ներկայացված՝ {yr}) — բաց անվճարունակության վարույթ։",
     nar_blocked: "ԱՐԳԵԼԱՓԱԿՎԱԾ՝ ",
+    nar_sanctions_clean: "OFAC պատժամիջոցների ստուգում — համընկնում չկա։",
     nar_coverage: "Կենդանի ստուգումն ընդգրկեց 10 տիրույթից {n}-ը։ Աճուրդները դեռ միացված չեն — դիտարկեք որպես մասնակի ստուգում։",
     miss_auction: "Աճուրդները կենդանի չեն ստուգվել",
     miss_cta_manual: "Խորհուրդ է տրվում ձեռքով ստուգում",

@@ -2,7 +2,7 @@
 // by tools/smoke-adapters.ts against the live portal; the deterministic suite tests only the
 // parsing helpers that turn grid rows into the recency signal.
 import { describe, it, expect } from "vitest";
-import { mostRecentCaseYear, caseUrl, nameKey, partyMatchesQuery, isSoleParty, parseClaimAmount, parseBankruptcyOutcome } from "./datalex";
+import { mostRecentCaseYear, caseUrl, nameKey, partyMatchesQuery, isSoleParty, parseBankruptcyOutcome } from "./datalex";
 
 describe("mostRecentCaseYear", () => {
   it("parses the 2-digit year suffix of Armenian case numbers", () => {
@@ -60,44 +60,6 @@ describe("isSoleParty (bankruptcy debtor = sole respondant only)", () => {
     expect(isSoleParty(field, ineco)).toBe(false);
     // ...whereas the loose guard would have wrongly matched it → false "debtor in bankruptcy"
     expect(partyMatchesQuery(field, ineco)).toBe(true);
-  });
-});
-
-describe("parseClaimAmount (demanded sum from the petitum)", () => {
-  it("payment order: amount before «դրամ», no verb", () => {
-    expect(parseClaimAmount("945.274 դրամի պ/մ")).toBe("945.274 AMD"); // .274 is a 3-digit group → kept
-  });
-  it("civil: first sum after «բռնագանձել», drops a 2-digit lumas tail", () => {
-    expect(parseClaimAmount("...բռնագանձել 15871536.20 /տասնհինգ միլիոն.../ ՀՀ դրամ, ինչպես նաև")).toBe("15871536 AMD");
-    expect(parseClaimAmount("հօգուտ Բանկի բռնագանձել 18,836,876,70 ՀՀ դրամ, որից")).toBe("18,836,876 AMD");
-  });
-  it("takes the principal (first after the verb), not later interest/penalty figures", () => {
-    expect(parseClaimAmount("ԽՆԴՐՈՒՄ ԵՆՔ բռնագանձել ընդհանուր 2,518,180.80 (երկու միլիոն ... դրամ) ՀՀ դրամ և 26,034.68 ԱՄՆ դոլար")).toBe("2,518,180 AMD");
-  });
-  it("handles space-separated thousands as one number (not the trailing group)", () => {
-    expect(parseClaimAmount("բռնագանձել 10 000 000 ՀՀ դրամ")).toBe("10 000 000 AMD");
-    expect(parseClaimAmount("բռնագանձել 5 000 000.50 ՀՀ դրամ")).toBe("5 000 000 AMD");
-  });
-  it("USD claims are labelled USD", () => {
-    expect(parseClaimAmount("բռնագանձել 26,034.68 ԱՄՆ դոլար")).toBe("26,034 USD");
-  });
-  it("skips law-article numbers before the verb", () => {
-    expect(parseClaimAmount("ղեկավարվելով 120-122-րդ հոդվածներով բռնագանձել 15871536.20 ՀՀ դրամ")).toBe("15871536 AMD");
-  });
-  it("skips a masked card/account number ('…7001 դրամային') and takes the real « ՀՀ դրամ» amount", () => {
-    const claim =
-      "Խնդրում եմ ... բռնագանձել 1. Թիվ 20501******7001 դրամային քարտային հաշվին ձևավորված գերածախսի գումարը՝ 195,420.69 ՀՀ դրամ";
-    expect(parseClaimAmount(claim)).toBe("195,420 AMD");
-  });
-  it("returns empty when there is no monetary demand (e.g. an executive-writ request)", () => {
-    expect(parseClaimAmount("խնդրում ենք տրամադրել կատարողական թերթ")).toBe("");
-    expect(parseClaimAmount("")).toBe("");
-  });
-  it("drops a sub-threshold figure (<100k AMD: fee / fragment / too-small-to-matter)", () => {
-    // real Apaven plaintiff petitum (no «բռնագանձ» verb) scanned from start → a stray "150 դրամ".
-    expect(parseClaimAmount("ղեկավարվելով ՀՀ ... 120-122-րդ հոդվածների դրույթներով ԽՆԴՐՈՒՄ ԵՆՔ ... 150 ՀՀ դրամ")).toBe("");
-    expect(parseClaimAmount("բռնագանձել 50 000 ՀՀ դրամ")).toBe(""); // below the 100k AMD floor (~$250)
-    expect(parseClaimAmount("բռնագանձել 150 000 ՀՀ դրամ")).toBe("150 000 AMD"); // above the floor — kept
   });
 });
 

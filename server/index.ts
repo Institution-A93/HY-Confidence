@@ -158,15 +158,9 @@ function deriveSignals(facts: Fact[]): Signal[] {
   const civilDef = def ? Number((def.value.match(/(\d+) civil case/) || [])[1] || 0) : 0;
   const payDef = def ? Number((def.value.match(/(\d+) payment-order/) || [])[1] || 0) : 0;
   const plaCount = pla ? Number((pla.value.match(/Plaintiff in (\d+)/) || [])[1] || 0) : 0;
-  // The datalex grid carries the demanded sum (petitum) in the fact value as "claim e.g. <amount>";
-  // surface it in the narrative as an EXAMPLE of exposure magnitude. It's the demanded (not awarded)
-  // amount and only a sample row — so it informs the reader, it does not scale the weight.
-  const claimOf = (v?: string) => (v ? ((v.match(/claim e\.g\. ([\d., ]+(?:AMD|USD))/) || [])[1] || "").trim() : "");
-
   if (pla) {
-    const ex = claimOf(pla.value);
-    const i18n = [P("sig_wp09_main", { n: plaCount }), ...(civilDef ? [P("sig_wp09_vs", { def: civilDef })] : []), ...(ex ? [P("sig_ex_claim", { amount: ex })] : []), P("sig_wp09_tail"), NM];
-    out.push(mkSignal("WP-09", "weak", "+", [pla.fact_id], `Plaintiff in ${plaCount} collection case(s) all-time${civilDef ? ` (vs ${civilDef} as defendant)` : ""}${ex ? `; example claim ${ex}` : ""} — actively enforces its own receivables.` + NAME_MATCHED, undefined, i18n));
+    const i18n = [P("sig_wp09_main", { n: plaCount }), ...(civilDef ? [P("sig_wp09_vs", { def: civilDef })] : []), P("sig_wp09_tail"), NM];
+    out.push(mkSignal("WP-09", "weak", "+", [pla.fact_id], `Plaintiff in ${plaCount} collection case(s) all-time${civilDef ? ` (vs ${civilDef} as defendant)` : ""} — actively enforces its own receivables.` + NAME_MATCHED, undefined, i18n));
   }
   if (def) {
     const yr = yearIn(def.value);
@@ -184,9 +178,8 @@ function deriveSignals(facts: Fact[]): Signal[] {
       const desc = payDef > 0
         ? `Net debt/litigation target (all-time): ${civilDef} civil + ${payDef} payment-order case(s) vs ${plaCount} as plaintiff`
         : `Net litigation target (all-time): ${civilDef} case(s) as defendant vs ${plaCount} as plaintiff`;
-      const ex = claimOf(def.value);
-      const i18n = [P(payDef > 0 ? "sig_sn01_pay" : "sig_sn01_civil", { civil: civilDef, pay: payDef, pla: plaCount }), ...(yr ? [P("sig_sn01_recent", { yr })] : []), ...(ex ? [P("sig_ex_claim", { amount: ex })] : []), P("sig_period"), NM];
-      out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `${desc}${yr ? `, most recent ${yr}` : ""}${ex ? `; example claim ${ex}` : ""}.` + NAME_MATCHED, base, i18n));
+      const i18n = [P(payDef > 0 ? "sig_sn01_pay" : "sig_sn01_civil", { civil: civilDef, pay: payDef, pla: plaCount }), ...(yr ? [P("sig_sn01_recent", { yr })] : []), P("sig_period"), NM];
+      out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `${desc}${yr ? `, most recent ${yr}` : ""}.` + NAME_MATCHED, base, i18n));
     } else if (net >= 1 && target === 1) {
       out.push(mkSignal("WN-07", "weak", "-", [def.fact_id], "A single, dated defendant case (>24 months old)." + NAME_MATCHED, undefined, [P("sig_wn07"), NM]));
     }
@@ -218,6 +211,11 @@ function buildNarrative(signals: Signal[], facts: Fact[], verified: number, sour
   const blocker = signals.find((s) => s.grade === "blocker");
   if (blocker) lines.push({ text: "BLOCKED: " + blocker.note, evidence: blocker.evidence, i18n: blocker.i18n ? [P("nar_blocked"), ...blocker.i18n] : undefined });
   for (const s of signals.filter((x) => x.grade !== "blocker")) lines.push({ text: s.note, evidence: s.evidence, i18n: s.i18n });
+  // Surface the sanctions screening result. A STRONG match is already the blocker line above and a
+  // POSSIBLE match is a missing-item CTA, so here we only show the reassuring CLEAN result — otherwise
+  // "we checked OFAC and it's clean" is invisible (the user asked why nothing shows for a clean entity).
+  const san = facts.find((fct) => fct.catalog_id === "F-SAN-01");
+  if (san && /no matches/i.test(san.value)) lines.push({ text: "OFAC sanctions screened — no match.", evidence: [san.fact_id], i18n: [P("nar_sanctions_clean")] });
   // Surface beneficial owners prominently. They carry no scored signal (ownership transparency is
   // context, not a risk weight), so without this they would sit only in the collapsed facts list.
   // (Owners/pledge lines are FACT values — still English; their i18n lands with the facts-table pass.)
@@ -253,7 +251,11 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
   // Propagate the TIN src.am resolved so the TIN-keyed adapters (e-register owners) work even when
   // the caller passed only a name — the resolver is the single place the TIN gets pinned.
   const resolvedTin = subject.tin || (taxVal.match(/— TIN (\d+)/) || [])[1] || undefined;
-  const keyedSubject: Subject = { ...subject, tin: resolvedTin };
+  // Carry the resolved canonical name onto the keyed subject so sanctions screens the entity name
+  // even on a TIN-only check (sanctions screens person||name; whois/mx/e-register/enforcement key on
+  // website/email/tin, so a name here is harmless to them). Without this, a TIN-only check screened ""
+  // → no F-SAN-01 fact → the dossier showed nothing about sanctions.
+  const keyedSubject: Subject = { ...subject, tin: resolvedTin, name: subject.name || canonicalName || undefined };
   const nameSubject: Subject = { ...subject, tin: resolvedTin, name: canonicalName };
 
   // Phase 2: keyed adapters (raw subject + resolved TIN) + name-keyed adapters (canonical name).

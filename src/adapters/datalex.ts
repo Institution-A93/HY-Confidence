@@ -14,13 +14,11 @@
 // TRANSPORT: the results grid is a jqGrid backed by an Elasticsearch JSON API at /json.php — no
 // browser needed. One GET of the search page yields a PHPSESSID; each search is a POST to
 // /json.php with function=getGridDataList and arg=[filterData, pagination, gridSearchDescription,
-// false]. The per-case DETAIL view (openCase) is captcha-gated ("Մուտքագրեք նկարի տեքստը"), so
-// verdict OUTCOMES and open/closed STATUS are not retrievable. The claim AMOUNT, however, IS in the
-// free grid — the row's `claim` field carries the plaintiff's full petitum text (recon 2026-06-24),
-// so amounts need no captcha; only the awarded result does. Consequences:
-//   • SN-01 is scaled by count + recency (NOT amount — separators in `claim` are ambiguous); the
-//     demanded sum is surfaced as a narrative EXAMPLE only (see parseClaimAmount). [outcome: follow-up]
-//   • WP-09 is "plaintiff in collection cases" — wins can't be confirmed (captcha); demanded sum shown.
+// false]. The per-case DETAIL view (openCase) is captcha-gated ("Մուտքագրեք նկարի տեքստը"). We solve
+// it (CapSolver) only for the bankruptcy VERDICT (declared/rejected/terminated → B-01); claim amounts
+// and win/loss outcomes are not surfaced. Consequences:
+//   • SN-01 is scaled by count + recency only.
+//   • WP-09 is "plaintiff in collection cases" — wins can't be confirmed (captcha).
 //   • B-01 needs an OPEN bankruptcy; we infer "open" from recency (see datalex.ts caller), since
 //     Armenian corporate bankruptcies run multi-year — a recent filing is almost certainly live.
 import { request } from "node:https";
@@ -55,55 +53,8 @@ interface Row {
   case_number?: string;
   case_external_id?: string;
   creation_datetime?: string | null;
-  // The grid's Elasticsearch _source carries the plaintiff's full petitum text (the DEMANDED sum)
-  // in `claim` — so claim AMOUNTS are free here. Only the OUTCOME (awarded/dismissed) is behind the
-  // detail-view captcha (ModCaptcha "Մուտքագրեք նկարի տեքստը"), which we deliberately do not touch.
-  claim?: string;
 }
 
-// Pull the principal demanded sum from a petitum. The amount we want follows the verb «բռնագանձել»
-// (to collect/award); payment orders have no verb ("945.274 դրամի պ/մ") so we scan from the start.
-// The number BEFORE «բռնագանձ» (law-article refs like "120-122-րդ հոդված") is thus skipped. Decimal
-// vs thousands separators are inconsistent in the source (945.274 = 945k; 18,836,876,70 = ~18.8M),
-// so we keep the grouping verbatim and only drop a 2-digit minor-unit tail — this is a DISPLAY
-// example (demanded, not awarded), never a scored number; scoring stays on count + recency.
-// Amount = digit groups separated by space/comma/dot (thousands) + optional 2-digit minor tail; OR a
-// plain run. Grouped alt FIRST so "10 000 000" is taken whole (else it captures only the trailing "000").
-const NUM = String.raw`\d{1,3}(?:[ .,]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?`;
-// Currency unit, NOT the adjective «դրամային» ("dram-denominated", used for account/card descriptions
-// like «...7001 դրամային քարտային հաշվին...»): the (?!ային) guard skips a masked card number's
-// trailing digits and lands on the real «… ՀՀ դրամ» amount. Genitive «դրամի» (payment orders) still matches.
-const CCY = String.raw`ՀՀ\s*դրամ(?!ային)|ԱՄՆ\s*դոլար|դրամ(?!ային)|դոլար`;
-const CLAIM_RE = new RegExp(`(${NUM})\\D{0,80}?(${CCY})`);
-// Below this we show no claim example. Two reasons: (1) such figures are usually noise — a state
-// duty / law-article ref / stray fragment from a verb-less petitum (verified: Apaven case
-// ԵԴ2/0105/02/25 scanned from the start → "150 դրամ"); (2) even a real sub-100k-AMD claim (~$250) is
-// too small to convey exposure magnitude, which is all this DISPLAY-only example is for. The floor is
-// per-currency: a USD claim's number is ~390× smaller for the same value, so it has its own threshold
-// (≈100k AMD) — otherwise a material "$26k" claim would be wrongly dropped.
-const CLAIM_MIN_AMD = 100_000;
-const CLAIM_MIN_USD = 250;
-export function parseClaimAmount(raw: string): string {
-  const t = (raw || "").replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
-  if (!t) return "";
-  const verb = t.match(/բռնագանձ\S*/);
-  const seg = verb ? t.slice(verb.index) : t;
-  const m = seg.match(CLAIM_RE);
-  if (!m) return "";
-  const code = /դոլար/.test(m[2]) ? "USD" : "AMD";
-  const num = m[1].replace(/[.,]\d{2}$/, ""); // drop a trailing lumas/cents group; keep digit grouping as-is
-  if (Number(num.replace(/\D/g, "")) < (code === "USD" ? CLAIM_MIN_USD : CLAIM_MIN_AMD)) return ""; // fee/fragment/too-small
-  return `${num} ${code}`;
-}
-
-// First parseable demanded sum across rows (already recency-desc), as a one-line "e.g." example.
-function claimExampleFrom(rows: Row[]): string {
-  for (const r of rows) {
-    const a = parseClaimAmount(r.claim || "");
-    if (a) return a;
-  }
-  return "";
-}
 
 function httpsReq(opts: import("node:https").RequestOptions, body?: string): Promise<{ headers: import("node:http").IncomingHttpHeaders; body: string }> {
   return new Promise((resolve, reject) => {
@@ -430,16 +381,13 @@ export const datalexAdapter: SourceAdapter = {
         const parts: string[] = [];
         if (def.count > 0) parts.push(`${def.count} civil case(s)`);
         if (pay.count > 0) parts.push(`${pay.count} payment-order(s)`);
-        // Civil petita first (the «բռնագանձել <sum>» form anchored on); payment orders are a
-        // fallback — their dotted-thousands form ("945.274") reads ambiguously as a decimal.
-        const claim = claimExampleFrom([...def.rows, ...pay.rows]);
         facts.push(
           makeFact({
             catalog_id: "F-CRT-02",
             subject: name,
             domain: "court",
             field: "defendant_cases",
-            value: `Defendant: ${parts.join(", ")} (all-time)${yr ? `; most recent ${yr}` : ""}${claim ? `; claim e.g. ${claim}` : ""} (${rows[0]?.case_number || "—"})`,
+            value: `Defendant: ${parts.join(", ")} (all-time)${yr ? `; most recent ${yr}` : ""} (${rows[0]?.case_number || "—"})`,
             source: this.source,
             url: "", // disabled ↗ — case_id link opens the search app, not the (captcha-gated) case
             fetched_at: now,
@@ -449,14 +397,13 @@ export const datalexAdapter: SourceAdapter = {
       }
       if (pla.count > 0) {
         const yr = mostRecentCaseYear(pla.rows);
-        const claim = claimExampleFrom(pla.rows);
         facts.push(
           makeFact({
             catalog_id: "F-CRT-01",
             subject: name,
             domain: "court",
             field: "plaintiff_cases",
-            value: `Plaintiff in ${pla.count} civil case(s) (all-time)${yr ? `; most recent ${yr}` : ""}${claim ? `; claim e.g. ${claim}` : ""}`,
+            value: `Plaintiff in ${pla.count} civil case(s) (all-time)${yr ? `; most recent ${yr}` : ""}`,
             source: this.source,
             url: "", // disabled ↗ — see caseUrl note
             fetched_at: now,
