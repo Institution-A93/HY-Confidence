@@ -17,6 +17,7 @@ import { eregisterAdapter, ownerNamesFromValue, parseOwnerLine } from "../src/ad
 import { pledgeAdapter } from "../src/adapters/pledge";
 import { procurementAdapter } from "../src/adapters/procurement";
 import { enforcementAdapter } from "../src/adapters/enforcement";
+import { top1000Adapter } from "../src/adapters/top1000";
 import { resilientFetch, TtlCache, CircuitBreaker } from "../src/lib/fetcher";
 import { COVERAGE_DOMAINS, makeFact } from "../src/lib/adapter";
 import { stripLegal, translitHyToLatin } from "../src/lib/normalize";
@@ -38,7 +39,8 @@ const breaker = new CircuitBreaker();
 const KEYED_ADAPTERS = [sanctionsAdapter, whoisAdapter, mxAdapter, eregisterAdapter, enforcementAdapter];
 // Name-keyed adapters need the CANONICAL Armenian name, so they run after src.am resolves it.
 // (procurement also reads the resolved TIN to CONFIRM the supplier match — see nameSubject below.)
-const NAME_KEYED_ADAPTERS = [azdararAdapter, datalexAdapter, pledgeAdapter, procurementAdapter];
+// top1000 is name-keyed too (it matches the canonical Armenian name against the SRC snapshot).
+const NAME_KEYED_ADAPTERS = [azdararAdapter, datalexAdapter, pledgeAdapter, procurementAdapter, top1000Adapter];
 
 // weightOverride lets a detector pass a scaled base weight (e.g. SN-01 after R-06 recency decay);
 // the engine still applies R-08/R-01 on top of whatever weight_base we hand it.
@@ -93,6 +95,11 @@ function deriveSignals(facts: Fact[]): Signal[] {
       else if (age >= 7 && active) out.push(mkSignal("SP-01", "strong", "+", [reg.fact_id], `Registered ${age} years ago and still active — an established operator.`, undefined, [P("sig_sp01", { age })]));
     }
   }
+
+  // Top-1000 taxpayer (SRC snapshot): a major, demonstrably tax-paying entity → strong positive.
+  // Name-matched (the list has no TIN) → R-08 damps it ×0.7.
+  const top = f("F-TAX-03");
+  if (top) out.push(mkSignal("SP-02", "strong", "+", [top.fact_id], `${top.value} — a major, demonstrably tax-paying entity.`, undefined, [P("sig_sp02")]));
 
   // Public notices (Azdarar): liquidation/bankruptcy veto; capital-reduction / creditor-call hurt.
   const notice = f("F-NTC-01");

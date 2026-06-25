@@ -136,10 +136,16 @@ Facts: F-REG-01..08, seeds F-GRA-01/02. **Backbone of identity.** Recon answers 
 ## src.am — State Revenue Committee (tax) · Epic B2
 Facts: F-TAX-01 TIN+name, F-TAX-02 VAT, F-TAX-03 top-1000.
 - Page: `src.am/en/taxpayerSearchSystemPage/112` (EN shell; HY parallel). **[V]** searchable by
-  TIN / company name / director.
-- ⚠ Likely an ASP.NET app — 🔎 capture the full postback (viewstate) or drive headless.
-- 🔎 Top-1000 publication: no stable URL, posted per-period as news/PDF — locate current period
-  (check `petekamutner.am` too).
+  TIN / company name / director. Adapter `src/adapters/srcam.ts` uses `POST /en/taxpayerSearchData`
+  (Laravel + CSRF + session cookie) → JSON record (F-TAX-01/02 + registry basics).
+- **F-TAX-03 top-1000 → ✅ BUILT as a STATIC SNAPSHOT (2026-06-25).** The list is published per-QUARTER
+  as an article/PDF with no stable URL; petekamutner.am is unreachable from our network, and src.am
+  serves it only via a JS SPA (Ziggy) whose publication API (`getNews1`/`showPublication`/`pubgetList`)
+  needs per-period reverse-engineering — and the official list carries NAME + amount, **NO TIN**. So we
+  match by the normalized canonical Armenian name against a quarterly snapshot in `src/data/top1000.ts`
+  (adapter `src/adapters/top1000.ts` → SP-02 +12, `match:"fuzzy"` ×0.7). SP-02 is positive-only, so a
+  stale/partial snapshot only withholds a bonus — never harms. ⚠ Refresh `period`+`names` each quarter
+  from the authoritative SRC publication (the data file is the single maintenance point).
 - This + e-register is what **de-fuzzes** name-matched facts (locks the TIN).
 
 ## datalex.am — Judicial portal (court) · Epic F1 — ✅ BUILT & LIVE (no browser needed)

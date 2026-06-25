@@ -48,6 +48,11 @@ src/
     azdarar.ts                           Azdarar public notices → liquidation/bankruptcy (name-keyed)
     datalex.ts                           Datalex courts → plaintiff/defendant/bankruptcy (name-keyed)
     eregister.ts                         State Register beneficial owners (e-register.moj.am, TIN-keyed)
+    pledge.ts, procurement.ts            registration.am pledges (name), armeps.am award wins (name+TIN)
+    enforcement.ts                       cabinet.harkadir.am DAHK open proceedings (TIN-keyed → SN-11)
+    top1000.ts                           SRC 1000-largest-taxpayers snapshot → SP-02 (name-keyed, no network)
+    spyur.ts                             spyur.am name resolver (DDG-Lite fallback for Latin→Armenian)
+  data/top1000.ts                        quarterly SRC top-1000 snapshot (the F-TAX-03 maintenance point)
 recon/SOURCES-RECON.md                   per-source build checklist for the fragile [R] scrapers
 tools/                                   one-shot scripts (CSS extraction, adapter smoke)
 Counterparty Check (standalone).html     the original Claude Design mockup (reference)
@@ -55,12 +60,13 @@ Counterparty Check (standalone).html     the original Claude Design mockup (refe
 
 ## Status
 
-| Real (works now) | Live data sources (≈6/10 domains) | Pending (needs recon / your input) |
+| Real (works now) | Live data sources (≈9/10 domains) | Pending (needs recon / your input) |
 |---|---|---|
-| Scoring engine over all 4 fixtures | Sanctions (OFAC), WHOIS (.am), Email MX | Enforcement (cesa.am — captcha), |
-| Fixture-driven UI (S1–S4) | SRC tax + registry + resolver (src.am) | auction (debtor not public → via cesa), |
-| Live `/check` + `/resolve` end-to-end | Notices (Azdarar), Courts (Datalex) | procurement, pledge; affiliation graph |
-| | Beneficial owners (e-register.moj.am) | + director/founders/history (login-gated) |
+| Scoring engine over all 4 fixtures | Sanctions (OFAC) + UBO screen, WHOIS, MX | Auction (debtor not public → via cesa), |
+| Fixture-driven UI (S1–S4) | SRC tax + registry + resolver (src.am) | affiliation graph + director/founders/ |
+| Live `/check` + `/resolve` end-to-end | Notices (Azdarar), Courts (Datalex) | history (e-register login-gated); |
+| Datalex case-detail captcha (CapSolver) | Enforcement (harkadir), Procurement, Pledge | top-1000 snapshot needs the SRC list loaded |
+| | Beneficial owners (e-register.moj.am) | |
 
 The frontend renders the Fact/Verdict JSON contract; the scoring engine is pure logic over
 Facts (client- or server-side). Data acquisition for the fragile sources needs a backend and
