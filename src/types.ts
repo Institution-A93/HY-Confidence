@@ -37,6 +37,16 @@ export interface Fact {
 export type Grade = "blocker" | "strong" | "weak";
 export type Polarity = "+" | "-";
 
+// Localizable text as an ORDERED list of pieces. Each piece is an i18n key + params; the render
+// translates each via the i18n dict and concatenates, so conditional fragments (e.g. "(vs N as
+// defendant)", "; example claim X") are just present-or-absent pieces — no combinatorial keys, and
+// every language keeps its own grammar. `note`/`text` stay as the English fallback (and for fixtures
+// that don't carry i18n). Server-generated content sets i18n; static demo fixtures may omit it.
+export interface I18nPiece {
+  key: string;
+  params?: Record<string, string | number>;
+}
+
 export interface Signal {
   id: string; // e.g. SN-01, SP-03, B-03, WP-06
   grade: Grade;
@@ -44,7 +54,8 @@ export interface Signal {
   weight_base: number | null; // blockers carry null — they veto
   weight_effective: number | null; // after rules (e.g. R-01 halving, R-08 ×0.7)
   evidence: string[]; // fact_ids
-  note: string; // becomes a narrative line
+  note: string; // English fallback; becomes a narrative line
+  i18n?: I18nPiece[]; // localized pieces (server-generated); render prefers these over `note`
 }
 
 export interface Rule {
@@ -58,14 +69,17 @@ export type TierKey = "T1" | "T2" | "T3" | "T4";
 export type VerdictState = "SCORED" | "BLOCKED" | "UNVERIFIABLE";
 
 export interface NarrativeLine {
-  text: string;
+  text: string; // English fallback
   evidence: string[];
+  i18n?: I18nPiece[]; // localized pieces; render prefers these over `text`
 }
 
 export interface MissingItem {
   gap: string;
   cta: string;
   mock: boolean;
+  gap_i18n?: I18nPiece[]; // localized `gap`
+  cta_i18n?: I18nPiece[]; // localized `cta`
 }
 
 export interface SpawnOffer {

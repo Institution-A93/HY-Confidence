@@ -23,7 +23,10 @@ import { stripLegal, translitHyToLatin } from "../src/lib/normalize";
 import type { AdapterResult, Subject } from "../src/lib/adapter";
 import { computeVerdict } from "../src/scoring/engine";
 import { baseWeightFor, enforcementWeight } from "../src/scoring/weights";
-import type { Fact, Signal, NarrativeLine, Fixture } from "../src/types";
+import type { Fact, Signal, NarrativeLine, Fixture, I18nPiece } from "../src/types";
+
+// Build one localized piece (key + params) for the i18n render layer.
+const P = (key: string, params?: Record<string, string | number>): I18nPiece => ({ key, params });
 
 const PORT = Number(process.env.PORT || 8080);
 const cache = new TtlCache<AdapterResult>(6 * 60 * 60 * 1000); // 6h
@@ -39,9 +42,9 @@ const NAME_KEYED_ADAPTERS = [azdararAdapter, datalexAdapter, pledgeAdapter, proc
 
 // weightOverride lets a detector pass a scaled base weight (e.g. SN-01 after R-06 recency decay);
 // the engine still applies R-08/R-01 on top of whatever weight_base we hand it.
-function mkSignal(id: string, grade: Signal["grade"], polarity: Signal["polarity"], evidence: string[], note: string, weightOverride?: number): Signal {
+function mkSignal(id: string, grade: Signal["grade"], polarity: Signal["polarity"], evidence: string[], note: string, weightOverride?: number, i18n?: I18nPiece[]): Signal {
   const w = grade === "blocker" ? null : weightOverride ?? baseWeightFor(id);
-  return { id, grade, polarity, weight_base: w, weight_effective: w, evidence, note };
+  return { id, grade, polarity, weight_base: w, weight_effective: w, evidence, note, i18n };
 }
 
 // Derive signals from the live Facts of the three domains we can actually query.
@@ -49,11 +52,13 @@ function deriveSignals(facts: Fact[]): Signal[] {
   const out: Signal[] = [];
   const f = (cat: string) => facts.find((x) => x.catalog_id === cat);
 
+  const NM = P("sig_name_matched"); // shared court "matched by name" suffix piece
+
   const san = f("F-SAN-01");
   // Only a STRONG (confident) sanctions name match vetoes. A "Possible OFAC match" is surfaced as
   // a manual-review CTA in runCheck — it must never auto-BLOCK on a coincidence of common words.
   if (san && /sanctions match \(strong\)/i.test(san.value)) {
-    out.push(mkSignal("B-05", "blocker", "-", [san.fact_id], "Director/UBO appears on the OFAC sanctions list (strong name match)."));
+    out.push(mkSignal("B-05", "blocker", "-", [san.fact_id], "Director/UBO appears on the OFAC sanctions list (strong name match).", undefined, [P("sig_b05")]));
   }
 
   const web = f("F-WEB-01");
@@ -61,21 +66,21 @@ function deriveSignals(facts: Fact[]): Signal[] {
     const m = web.value.match(/registered (\d{4})/);
     if (m) {
       const age = new Date().getFullYear() - Number(m[1]);
-      if (age >= 3) out.push(mkSignal("WP-01", "weak", "+", [web.fact_id], `Domain registered ${age} years ago — an established web presence.`));
-      else if (age < 1) out.push(mkSignal("WN-03", "weak", "-", [web.fact_id], "Domain registered under a year ago — thin web history."));
+      if (age >= 3) out.push(mkSignal("WP-01", "weak", "+", [web.fact_id], `Domain registered ${age} years ago — an established web presence.`, undefined, [P("sig_wp01", { age })]));
+      else if (age < 1) out.push(mkSignal("WN-03", "weak", "-", [web.fact_id], "Domain registered under a year ago — thin web history.", undefined, [P("sig_wn03")]));
     }
   }
 
   const con = f("F-CON-02");
   if (con) {
-    if (/matches website domain/i.test(con.value)) out.push(mkSignal("WP-03", "weak", "+", [con.fact_id], "Email domain matches the website."));
-    else if (/generic provider/i.test(con.value)) out.push(mkSignal("WN-02", "weak", "-", [con.fact_id], "Generic email provider as the primary B2B contact."));
+    if (/matches website domain/i.test(con.value)) out.push(mkSignal("WP-03", "weak", "+", [con.fact_id], "Email domain matches the website.", undefined, [P("sig_wp03")]));
+    else if (/generic provider/i.test(con.value)) out.push(mkSignal("WN-02", "weak", "-", [con.fact_id], "Generic email provider as the primary B2B contact.", undefined, [P("sig_wn02")]));
   }
 
   // Registry facts (from the SRC taxpayer record): status + entity age.
   const status = f("F-REG-01");
   if (status && /լուծար|սնանկ/.test(status.value)) {
-    out.push(mkSignal("B-02", "blocker", "-", [status.fact_id], "Registry status indicates liquidation or bankruptcy."));
+    out.push(mkSignal("B-02", "blocker", "-", [status.fact_id], "Registry status indicates liquidation or bankruptcy.", undefined, [P("sig_b02_status")]));
   }
   const reg = f("F-REG-02");
   if (reg) {
@@ -83,8 +88,8 @@ function deriveSignals(facts: Fact[]): Signal[] {
     if (yr) {
       const age = new Date().getFullYear() - yr;
       const active = !!status && /Գործող/.test(status.value);
-      if (age < 1) out.push(mkSignal("SN-07", "strong", "-", [reg.fact_id], "Entity is under a year old."));
-      else if (age >= 7 && active) out.push(mkSignal("SP-01", "strong", "+", [reg.fact_id], `Registered ${age} years ago and still active — an established operator.`));
+      if (age < 1) out.push(mkSignal("SN-07", "strong", "-", [reg.fact_id], "Entity is under a year old.", undefined, [P("sig_sn07")]));
+      else if (age >= 7 && active) out.push(mkSignal("SP-01", "strong", "+", [reg.fact_id], `Registered ${age} years ago and still active — an established operator.`, undefined, [P("sig_sp01", { age })]));
     }
   }
 
@@ -92,11 +97,11 @@ function deriveSignals(facts: Fact[]): Signal[] {
   const notice = f("F-NTC-01");
   if (notice) {
     if (/Liquidation notice|Bankruptcy notice/.test(notice.value)) {
-      out.push(mkSignal("B-02", "blocker", "-", [notice.fact_id], "Public notice of liquidation or bankruptcy (Azdarar)."));
+      out.push(mkSignal("B-02", "blocker", "-", [notice.fact_id], "Public notice of liquidation or bankruptcy (Azdarar).", undefined, [P("sig_b02_notice")]));
     } else if (/Capital-reduction notice/.test(notice.value)) {
-      out.push(mkSignal("SN-04", "strong", "-", [notice.fact_id], "Capital-reduction notice published — equity being pulled out."));
+      out.push(mkSignal("SN-04", "strong", "-", [notice.fact_id], "Capital-reduction notice published — equity being pulled out.", undefined, [P("sig_sn04_capital")]));
     } else if (/Creditor-call notice/.test(notice.value)) {
-      out.push(mkSignal("SN-04", "strong", "-", [notice.fact_id], "Creditor-call notice published."));
+      out.push(mkSignal("SN-04", "strong", "-", [notice.fact_id], "Creditor-call notice published.", undefined, [P("sig_sn04_creditor")]));
     }
   }
 
@@ -108,13 +113,13 @@ function deriveSignals(facts: Fact[]): Signal[] {
   if (enf) {
     const count = Number((enf.value.match(/^(\d+) open/) || [])[1] || 1);
     const total = Number((enf.value.match(/total ([\d,]+) AMD/) || [])[1]?.replace(/,/g, "") || 0);
-    out.push(mkSignal("SN-11", "strong", "-", [enf.fact_id], `Open compulsory enforcement at DAHK (active bailiff collection) — ${enf.value}.`, enforcementWeight(total, count)));
+    out.push(mkSignal("SN-11", "strong", "-", [enf.fact_id], `Open compulsory enforcement at DAHK (active bailiff collection) — ${enf.value}.`, enforcementWeight(total, count), [P("sig_sn11", { count, amount: total.toLocaleString("en-US") })]));
   }
 
   // Procurement (armeps): F-PRC-01 only carries wins already filtered to the ≤36mo SP-03 window
   // (the adapter applies it), so its presence IS the signal — a positive credibility marker.
   const prc = f("F-PRC-01");
-  if (prc) out.push(mkSignal("SP-03", "strong", "+", [prc.fact_id], `State-procurement wins in the last 36 months — a real, operating supplier. ${prc.value}`));
+  if (prc) out.push(mkSignal("SP-03", "strong", "+", [prc.fact_id], `State-procurement wins in the last 36 months — a real, operating supplier. ${prc.value}`, undefined, [P("sig_sp03")]));
 
   // Pledge (registration.am). R-05: a movable-property pledge is normal working-capital financing
   // and is NEUTRAL on a mature entity. SN-06 fires ONLY on the distress pattern — a FRESH pledge
@@ -132,7 +137,7 @@ function deriveSignals(facts: Fact[]): Signal[] {
     // Evidence is the pledge fact ALONE (fuzzy → R-08 ×0.7); entity age is a gating condition, not
     // evidence of the pledge — including the exact F-REG-02 fact would suppress the fuzzy damping.
     if (pledgeMonthsAgo <= 12 && entityAge <= 2) {
-      out.push(mkSignal("SN-06", "strong", "-", [plg.fact_id], `Fresh asset pledge on a ${entityAge}-year-old entity — core assets encumbered early. ${plg.value}`));
+      out.push(mkSignal("SN-06", "strong", "-", [plg.fact_id], `Fresh asset pledge on a ${entityAge}-year-old entity — core assets encumbered early. ${plg.value}`, undefined, [P("sig_sn06", { age: entityAge })]));
     }
   }
 
@@ -160,7 +165,8 @@ function deriveSignals(facts: Fact[]): Signal[] {
 
   if (pla) {
     const ex = claimOf(pla.value);
-    out.push(mkSignal("WP-09", "weak", "+", [pla.fact_id], `Plaintiff in ${plaCount} collection case(s) all-time${civilDef ? ` (vs ${civilDef} as defendant)` : ""}${ex ? `; example claim ${ex}` : ""} — actively enforces its own receivables.` + NAME_MATCHED));
+    const i18n = [P("sig_wp09_main", { n: plaCount }), ...(civilDef ? [P("sig_wp09_vs", { def: civilDef })] : []), ...(ex ? [P("sig_ex_claim", { amount: ex })] : []), P("sig_wp09_tail"), NM];
+    out.push(mkSignal("WP-09", "weak", "+", [pla.fact_id], `Plaintiff in ${plaCount} collection case(s) all-time${civilDef ? ` (vs ${civilDef} as defendant)` : ""}${ex ? `; example claim ${ex}` : ""} — actively enforces its own receivables.` + NAME_MATCHED, undefined, i18n));
   }
   if (def) {
     const yr = yearIn(def.value);
@@ -179,9 +185,10 @@ function deriveSignals(facts: Fact[]): Signal[] {
         ? `Net debt/litigation target (all-time): ${civilDef} civil + ${payDef} payment-order case(s) vs ${plaCount} as plaintiff`
         : `Net litigation target (all-time): ${civilDef} case(s) as defendant vs ${plaCount} as plaintiff`;
       const ex = claimOf(def.value);
-      out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `${desc}${yr ? `, most recent ${yr}` : ""}${ex ? `; example claim ${ex}` : ""}.` + NAME_MATCHED, base));
+      const i18n = [P(payDef > 0 ? "sig_sn01_pay" : "sig_sn01_civil", { civil: civilDef, pay: payDef, pla: plaCount }), ...(yr ? [P("sig_sn01_recent", { yr })] : []), ...(ex ? [P("sig_ex_claim", { amount: ex })] : []), P("sig_period"), NM];
+      out.push(mkSignal("SN-01", "strong", "-", [def.fact_id], `${desc}${yr ? `, most recent ${yr}` : ""}${ex ? `; example claim ${ex}` : ""}.` + NAME_MATCHED, base, i18n));
     } else if (net >= 1 && target === 1) {
-      out.push(mkSignal("WN-07", "weak", "-", [def.fact_id], "A single, dated defendant case (>24 months old)." + NAME_MATCHED));
+      out.push(mkSignal("WN-07", "weak", "-", [def.fact_id], "A single, dated defendant case (>24 months old)." + NAME_MATCHED, undefined, [P("sig_wn07"), NM]));
     }
   }
 
@@ -197,7 +204,7 @@ function deriveSignals(facts: Fact[]): Signal[] {
     // are NOT blocked — they could be discharged, which we cannot confirm behind the detail
     // captcha — so a stale bankruptcy stays visible as the F-CRT-03 fact without vetoing the score.
     if (!rejected && yr !== null && nowYear - yr <= 4) {
-      out.push(mkSignal("B-01", "blocker", "-", [bkr.fact_id], `Appears as the debtor in a bankruptcy case (filed ${yr}) — open insolvency proceedings.` + NAME_MATCHED));
+      out.push(mkSignal("B-01", "blocker", "-", [bkr.fact_id], `Appears as the debtor in a bankruptcy case (filed ${yr}) — open insolvency proceedings.` + NAME_MATCHED, undefined, [P("sig_b01", { yr }), NM]));
     }
   }
   return out;
@@ -206,10 +213,11 @@ function deriveSignals(facts: Fact[]): Signal[] {
 function buildNarrative(signals: Signal[], facts: Fact[], verified: number, sourcesText: string): NarrativeLine[] {
   const lines: NarrativeLine[] = [];
   const blocker = signals.find((s) => s.grade === "blocker");
-  if (blocker) lines.push({ text: "BLOCKED: " + blocker.note, evidence: blocker.evidence });
-  for (const s of signals.filter((x) => x.grade !== "blocker")) lines.push({ text: s.note, evidence: s.evidence });
+  if (blocker) lines.push({ text: "BLOCKED: " + blocker.note, evidence: blocker.evidence, i18n: blocker.i18n ? [P("nar_blocked"), ...blocker.i18n] : undefined });
+  for (const s of signals.filter((x) => x.grade !== "blocker")) lines.push({ text: s.note, evidence: s.evidence, i18n: s.i18n });
   // Surface beneficial owners prominently. They carry no scored signal (ownership transparency is
   // context, not a risk weight), so without this they would sit only in the collapsed facts list.
+  // (Owners/pledge lines are FACT values — still English; their i18n lands with the facts-table pass.)
   const owners = facts.find((fct) => fct.catalog_id === "F-REG-07");
   if (owners) lines.push({ text: owners.value, evidence: [owners.fact_id] });
   // Surface pledges as context when they did not trip SN-06 (mature-entity working-capital pledges
@@ -219,6 +227,7 @@ function buildNarrative(signals: Signal[], facts: Fact[], verified: number, sour
   lines.push({
     text: `Live check covered ${verified} of 10 domains (${sourcesText}). Auction is not wired yet — treat this as a partial read.`,
     evidence: [],
+    i18n: [P("nar_coverage", { n: verified })],
   });
   return lines;
 }
@@ -274,9 +283,9 @@ async function runCheck(input: Record<string, string>): Promise<Fixture> {
   const nameEn = input.entity_name || (resolvedName ? translitHyToLatin(resolvedName) : "") || input.website || input.tin || "Counterparty";
   // A non-blocking "possible" sanctions match surfaces as a review gap (the strong match already
   // vetoed via B-05 in deriveSignals; this is the soft path that must NOT block).
-  const missing = [{ gap: "Auction not checked live", cta: "Manual check recommended", mock: false }];
+  const missing = [{ gap: "Auction not checked live", cta: "Manual check recommended", mock: false, gap_i18n: [P("miss_auction")], cta_i18n: [P("miss_cta_manual")] }];
   if (facts.some((ff) => ff.catalog_id === "F-SAN-01" && /Possible OFAC match/i.test(ff.value)))
-    missing.unshift({ gap: "Possible sanctions name match (unconfirmed)", cta: "Verify the counterparty name against the OFAC SDN list manually", mock: false });
+    missing.unshift({ gap: "Possible sanctions name match (unconfirmed)", cta: "Verify the counterparty name against the OFAC SDN list manually", mock: false, gap_i18n: [P("miss_sanctions")], cta_i18n: [P("miss_cta_sanctions")] });
   const fixture = {
     id: "live:" + (input.tin || input.entity_name || input.website || "q"),
     label: "Live check",

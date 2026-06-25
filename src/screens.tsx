@@ -2,7 +2,7 @@
 // Export button is wired to onExport (the mockup shipped it disabled). All shell copy via
 // t(); entity/fixture data stays bilingual.
 import { useState, useEffect, useRef, useContext } from "react";
-import { useT, LangContext } from "./i18n";
+import { useT, LangContext, joinPieces } from "./i18n";
 import { EvidenceLinks, StatusChip, TierStrip, TIER_COLOR, domainStates, isEmptyValue, checkedAtOf, formatChecked } from "./components";
 import type { CheckInput, Fixture, MissingItem, NarrativeLine, Signal, SpawnOffer, TierKey, Verdict } from "./types";
 
@@ -387,7 +387,7 @@ function SignalRow({
     <div className={"sig-row" + (highlight ? " hl-highlight" : "")} onMouseEnter={onHover} onMouseLeave={onLeave}>
       <div className="sid">{sig.id}</div>
       <div className="snote">
-        {sig.note} <EvidenceLinks fixture={fixture} ids={sig.evidence} />
+        {joinPieces(t, sig.i18n) ?? sig.note} <EvidenceLinks fixture={fixture} ids={sig.evidence} />
         {rule && (
           <span>
             {" "}
@@ -527,7 +527,7 @@ export function VerdictScreen({
                 const s = signals.find((x) => x.id === bid);
                 return s ? (
                   <li key={bid}>
-                    {s.note} <EvidenceLinks fixture={fixture} ids={s.evidence} />
+                    {joinPieces(t, s.i18n) ?? s.note} <EvidenceLinks fixture={fixture} ids={s.evidence} />
                   </li>
                 ) : null;
               })}
@@ -598,7 +598,7 @@ export function VerdictScreen({
                   <span className="rl-marker">{lineMarker(fixture, line)}</span>
                   <p className="rl-text">
                     {tag && <span className="tag-reason">{t("tag_" + tag)}</span>}
-                    {line.text} <EvidenceLinks fixture={fixture} ids={line.evidence} />
+                    {joinPieces(t, line.i18n) ?? line.text} <EvidenceLinks fixture={fixture} ids={line.evidence} />
                   </p>
                 </div>
               );
@@ -727,10 +727,10 @@ export function VerdictScreen({
           <div className="rail">
             {v.missing.map((m, i) => (
               <div key={i} className="gap-card">
-                <div className="g-gap">{m.gap}</div>
+                <div className="g-gap">{joinPieces(t, m.gap_i18n) ?? m.gap}</div>
                 <div className="g-cta">
                   <button className="btn ghost sm" onClick={() => (m.mock ? onKyc(m) : onAddTin())}>
-                    {m.cta}
+                    {joinPieces(t, m.cta_i18n) ?? m.cta}
                   </button>
                 </div>
                 <div className="mocktag">{m.mock ? t("mock") : t("live")}</div>
