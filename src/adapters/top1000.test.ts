@@ -1,23 +1,20 @@
-// Pure-logic test for the top-1000 name matcher. The data file (src/data/top1000.ts) is a
-// quarterly snapshot and may be empty between refreshes, so we test the matcher against a fixture
-// list — it must match on the normalized canonical name (legal form / «» / case-insensitive) and
-// return the published 1-based rank.
+// Pure-logic test for the top-1000 TIN matcher. The data file (src/data/top1000.ts) is a quarterly
+// snapshot and may be empty between refreshes, so we test the matcher against a fixture list — it
+// must return the published 1-based rank for a member TIN and null otherwise.
 import { describe, it, expect } from "vitest";
 import { top1000Rank } from "./top1000";
 
 describe("top1000Rank", () => {
-  // Synthetic fixtures (NOT real list members) — just exercise the normalization + rank logic.
-  const list = ["«Թեստ Ալֆա» ՍՊԸ", "Բետա Կորպ ՓԲԸ", "«Գամմա Հոլդինգ»"];
+  const tins = ["01850138", "02216066", "09400818"]; // synthetic order, rank = index + 1
 
-  it("matches ignoring legal form, « », and case, returning the 1-based rank", () => {
-    expect(top1000Rank("ԹԵՍՏ ԱԼՖԱ", list)).toBe(1); // no «», no ՍՊԸ, upper vs title
-    expect(top1000Rank("«Բետա Կորպ» ՍՊԸ", list)).toBe(2); // different legal form, still the same entity name
-    expect(top1000Rank("Գամմա Հոլդինգ", list)).toBe(3);
+  it("returns the 1-based rank of a member TIN", () => {
+    expect(top1000Rank("01850138", tins)).toBe(1);
+    expect(top1000Rank("09400818", tins)).toBe(3);
   });
 
-  it("returns null for a non-member and for empty input", () => {
-    expect(top1000Rank("«Ուրիշ Ընկերություն» ՍՊԸ", list)).toBeNull();
-    expect(top1000Rank("", list)).toBeNull();
-    expect(top1000Rank("Թեստ Ալֆա", [])).toBeNull(); // empty snapshot → no match (safe no-op)
+  it("returns null for a non-member, empty TIN, and empty snapshot", () => {
+    expect(top1000Rank("99999999", tins)).toBeNull();
+    expect(top1000Rank("", tins)).toBeNull();
+    expect(top1000Rank("01850138", [])).toBeNull(); // empty snapshot → safe no-op
   });
 });

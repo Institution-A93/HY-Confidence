@@ -36,11 +36,11 @@ const breaker = new CircuitBreaker();
 // Keyed adapters run with the raw subject (TIN / email / website / person). e-register is
 // TIN-keyed (beneficial owners by the confirmed TIN) — it enriches the registry domain src.am
 // already covers, so it adds owner Facts without changing the coverage count.
-const KEYED_ADAPTERS = [sanctionsAdapter, whoisAdapter, mxAdapter, eregisterAdapter, enforcementAdapter];
+// top1000 is TIN-keyed (matches the resolved TIN against the SRC snapshot, exact) → keyed phase.
+const KEYED_ADAPTERS = [sanctionsAdapter, whoisAdapter, mxAdapter, eregisterAdapter, enforcementAdapter, top1000Adapter];
 // Name-keyed adapters need the CANONICAL Armenian name, so they run after src.am resolves it.
 // (procurement also reads the resolved TIN to CONFIRM the supplier match — see nameSubject below.)
-// top1000 is name-keyed too (it matches the canonical Armenian name against the SRC snapshot).
-const NAME_KEYED_ADAPTERS = [azdararAdapter, datalexAdapter, pledgeAdapter, procurementAdapter, top1000Adapter];
+const NAME_KEYED_ADAPTERS = [azdararAdapter, datalexAdapter, pledgeAdapter, procurementAdapter];
 
 // weightOverride lets a detector pass a scaled base weight (e.g. SN-01 after R-06 recency decay);
 // the engine still applies R-08/R-01 on top of whatever weight_base we hand it.
@@ -96,8 +96,7 @@ function deriveSignals(facts: Fact[]): Signal[] {
     }
   }
 
-  // Top-1000 taxpayer (SRC snapshot): a major, demonstrably tax-paying entity → strong positive.
-  // Name-matched (the list has no TIN) → R-08 damps it ×0.7.
+  // Top-1000 taxpayer (SRC snapshot, TIN-matched exact): a major, demonstrably tax-paying entity.
   const top = f("F-TAX-03");
   if (top) out.push(mkSignal("SP-02", "strong", "+", [top.fact_id], `${top.value} — a major, demonstrably tax-paying entity.`, undefined, [P("sig_sp02")]));
 

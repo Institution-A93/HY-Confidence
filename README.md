@@ -50,7 +50,7 @@ src/
     eregister.ts                         State Register beneficial owners (e-register.moj.am, TIN-keyed)
     pledge.ts, procurement.ts            registration.am pledges (name), armeps.am award wins (name+TIN)
     enforcement.ts                       cabinet.harkadir.am DAHK open proceedings (TIN-keyed → SN-11)
-    top1000.ts                           SRC 1000-largest-taxpayers snapshot → SP-02 (name-keyed, no network)
+    top1000.ts                           SRC 1000-largest-taxpayers snapshot → SP-02 (TIN-keyed, no network)
     spyur.ts                             spyur.am name resolver (DDG-Lite fallback for Latin→Armenian)
   data/top1000.ts                        quarterly SRC top-1000 snapshot (the F-TAX-03 maintenance point)
 recon/SOURCES-RECON.md                   per-source build checklist for the fragile [R] scrapers

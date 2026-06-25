@@ -138,14 +138,15 @@ Facts: F-TAX-01 TIN+name, F-TAX-02 VAT, F-TAX-03 top-1000.
 - Page: `src.am/en/taxpayerSearchSystemPage/112` (EN shell; HY parallel). **[V]** searchable by
   TIN / company name / director. Adapter `src/adapters/srcam.ts` uses `POST /en/taxpayerSearchData`
   (Laravel + CSRF + session cookie) → JSON record (F-TAX-01/02 + registry basics).
-- **F-TAX-03 top-1000 → ✅ BUILT as a STATIC SNAPSHOT (2026-06-25).** The list is published per-QUARTER
-  as an article/PDF with no stable URL; petekamutner.am is unreachable from our network, and src.am
-  serves it only via a JS SPA (Ziggy) whose publication API (`getNews1`/`showPublication`/`pubgetList`)
-  needs per-period reverse-engineering — and the official list carries NAME + amount, **NO TIN**. So we
-  match by the normalized canonical Armenian name against a quarterly snapshot in `src/data/top1000.ts`
-  (adapter `src/adapters/top1000.ts` → SP-02 +12, `match:"fuzzy"` ×0.7). SP-02 is positive-only, so a
-  stale/partial snapshot only withholds a bonus — never harms. ⚠ Refresh `period`+`names` each quarter
-  from the authoritative SRC publication (the data file is the single maintenance point).
+- **F-TAX-03 top-1000 → ✅ BUILT as a STATIC SNAPSHOT (2026-06-25).** The SRC publishes the list
+  per-period with no stable URL; petekamutner.am is unreachable from our network, and src.am serves it
+  only via a JS SPA (Ziggy) whose publication API needs per-period reverse-engineering. Sourced instead
+  from **karg.am/top-1000**, a public aggregator that exposes each entry's **TIN** (`/company/<TIN>`) —
+  so we key by TIN, an **EXACT** match (`match:"exact"`, no R-08 damping), not a fuzzy name guess. The
+  full 1000-TIN snapshot (rank-ordered) lives in `src/data/top1000.ts`; adapter `src/adapters/top1000.ts`
+  → SP-02 +12. SP-02 is positive-only, so a stale/partial snapshot only withholds a bonus — never harms.
+  ⚠ Refresh `pulledAt`+`tins` each period by re-crawling karg.am (the data file is the single
+  maintenance point). Verified live: ML Mining (TIN 02569362) is in the list → SP-02 fires.
 - This + e-register is what **de-fuzzes** name-matched facts (locks the TIN).
 
 ## datalex.am — Judicial portal (court) · Epic F1 — ✅ BUILT & LIVE (no browser needed)
