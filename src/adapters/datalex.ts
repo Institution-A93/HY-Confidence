@@ -77,10 +77,12 @@ const CCY = String.raw`ՀՀ\s*դրամ(?!ային)|ԱՄՆ\s*դոլար|դրամ(
 const CLAIM_RE = new RegExp(`(${NUM})\\D{0,80}?(${CCY})`);
 // Below this we show no claim example. Two reasons: (1) such figures are usually noise — a state
 // duty / law-article ref / stray fragment from a verb-less petitum (verified: Apaven case
-// ԵԴ2/0105/02/25 scanned from the start → "150 դրամ"); (2) even a real sub-100k claim (~$250) is too
-// small to convey exposure magnitude, which is all this DISPLAY-only example is for. Showing nothing
-// beats showing a trivial number.
+// ԵԴ2/0105/02/25 scanned from the start → "150 դրամ"); (2) even a real sub-100k-AMD claim (~$250) is
+// too small to convey exposure magnitude, which is all this DISPLAY-only example is for. The floor is
+// per-currency: a USD claim's number is ~390× smaller for the same value, so it has its own threshold
+// (≈100k AMD) — otherwise a material "$26k" claim would be wrongly dropped.
 const CLAIM_MIN_AMD = 100_000;
+const CLAIM_MIN_USD = 250;
 export function parseClaimAmount(raw: string): string {
   const t = (raw || "").replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
   if (!t) return "";
@@ -90,7 +92,7 @@ export function parseClaimAmount(raw: string): string {
   if (!m) return "";
   const code = /դոլար/.test(m[2]) ? "USD" : "AMD";
   const num = m[1].replace(/[.,]\d{2}$/, ""); // drop a trailing lumas/cents group; keep digit grouping as-is
-  if (Number(num.replace(/\D/g, "")) < CLAIM_MIN_AMD) return ""; // fee/duty/fragment, not a real claim
+  if (Number(num.replace(/\D/g, "")) < (code === "USD" ? CLAIM_MIN_USD : CLAIM_MIN_AMD)) return ""; // fee/fragment/too-small
   return `${num} ${code}`;
 }
 
