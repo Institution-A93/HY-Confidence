@@ -93,11 +93,11 @@ describe("parseClaimAmount (demanded sum from the petitum)", () => {
     expect(parseClaimAmount("խնդրում ենք տրամադրել կատարողական թերթ")).toBe("");
     expect(parseClaimAmount("")).toBe("");
   });
-  it("drops a sub-threshold figure (fee / state duty / fragment), not a real claim", () => {
+  it("drops a sub-threshold figure (<100k AMD: fee / fragment / too-small-to-matter)", () => {
     // real Apaven plaintiff petitum (no «բռնագանձ» verb) scanned from start → a stray "150 դրամ".
     expect(parseClaimAmount("ղեկավարվելով ՀՀ ... 120-122-րդ հոդվածների դրույթներով ԽՆԴՐՈՒՄ ԵՆՔ ... 150 ՀՀ դրամ")).toBe("");
-    expect(parseClaimAmount("բռնագանձել 500 ՀՀ դրամ")).toBe(""); // below the 1000 AMD floor
-    expect(parseClaimAmount("բռնագանձել 1 500 ՀՀ դրամ")).toBe("1 500 AMD"); // above the floor — kept
+    expect(parseClaimAmount("բռնագանձել 50 000 ՀՀ դրամ")).toBe(""); // below the 100k AMD floor (~$250)
+    expect(parseClaimAmount("բռնագանձել 150 000 ՀՀ դրամ")).toBe("150 000 AMD"); // above the floor — kept
   });
 });
 

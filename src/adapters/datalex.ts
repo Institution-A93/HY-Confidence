@@ -75,11 +75,12 @@ const NUM = String.raw`\d{1,3}(?:[ .,]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})
 // trailing digits and lands on the real «… ՀՀ դրամ» amount. Genitive «դրամի» (payment orders) still matches.
 const CCY = String.raw`ՀՀ\s*դրամ(?!ային)|ԱՄՆ\s*դոլար|դրամ(?!ային)|դոլար`;
 const CLAIM_RE = new RegExp(`(${NUM})\\D{0,80}?(${CCY})`);
-// Below this, a parsed "claim" is really a state duty / law-article ref / stray fragment, not the
-// principal demand. Verified: a plaintiff petitum with no «բռնագանձ» verb (Apaven case ԵԴ2/0105/02/25)
-// scanned from the start and yielded "150 դրամ" — nonsensical as a cargo carrier's claim. This is a
-// DISPLAY example only, so dropping a sub-threshold figure (show nothing) beats showing "150 AMD".
-const CLAIM_MIN_AMD = 1000;
+// Below this we show no claim example. Two reasons: (1) such figures are usually noise — a state
+// duty / law-article ref / stray fragment from a verb-less petitum (verified: Apaven case
+// ԵԴ2/0105/02/25 scanned from the start → "150 դրամ"); (2) even a real sub-100k claim (~$250) is too
+// small to convey exposure magnitude, which is all this DISPLAY-only example is for. Showing nothing
+// beats showing a trivial number.
+const CLAIM_MIN_AMD = 100_000;
 export function parseClaimAmount(raw: string): string {
   const t = (raw || "").replace(/<[^>]+>/g, " ").replace(/&[a-z]+;/gi, " ").replace(/\s+/g, " ").trim();
   if (!t) return "";
