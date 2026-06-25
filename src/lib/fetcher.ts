@@ -60,10 +60,14 @@ export class CircuitBreaker {
 }
 
 // Key must reflect EVERY subject field an adapter might query — keying on name alone let two
-// different people at the same company collide (sanctions screens `person`, not `name`).
+// different people at the same company collide (sanctions screens `person`, not `name`). It must
+// also include the adapter's SOURCE, not just its domain: two adapters can share a domain (src.am
+// and the top-1000 snapshot are both "tax"), and on the same subject a domain-only key collides —
+// one adapter then returns the other's cached facts (observed: top-1000 served src.am's facts,
+// duplicating them and dropping F-TAX-03).
 function keyFor(adapter: SourceAdapter, subject: Subject): string {
   const s = subject;
-  return `${adapter.domain}:${s.tin || ""}|${s.name || ""}|${s.person || ""}|${s.website || ""}|${s.email || ""}|${s.phone || ""}`;
+  return `${adapter.domain}:${adapter.source}:${s.tin || ""}|${s.name || ""}|${s.person || ""}|${s.website || ""}|${s.email || ""}|${s.phone || ""}`;
 }
 
 export interface ResilienceOpts {
