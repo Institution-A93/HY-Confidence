@@ -78,7 +78,15 @@ export function InputScreen({
         </div>
 
         <div className="field">
-          <label>{t("s1_phone")}</label>
+          <label>
+            {t("s1_phone")}
+            {/* Phone is collected but not yet wired into the check (reverse-lookup / channel
+                attribution per the spec are not live) — flag it honestly rather than imply it scores. */}
+            <span className="soon-badge">{t("soon")}</span>
+            <span className="tip" data-tip={t("s1_phone_soon_tip")}>
+              i
+            </span>
+          </label>
           <input value={v.phone ?? ""} onChange={set("phone")} onKeyDown={onKey} placeholder={t("s1_phone_ph")} />
         </div>
 

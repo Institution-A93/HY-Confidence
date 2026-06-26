@@ -260,6 +260,15 @@ a { color: inherit; }
   padding: 1px 6px; border-radius: 3px; margin-left: auto;
 }
 
+/* "coming soon" — a muted, non-accent variant of .tin-badge for inputs we collect but do not yet
+   use in the check (currently the phone field; see the gap vs the spec's channel-attribution model). */
+.soon-badge {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .05em; white-space: nowrap;
+  color: var(--ink-3); background: #EFEDE9; border: 1px solid var(--hairline-2);
+  padding: 1px 6px; border-radius: 3px; margin-left: auto;
+}
+
 .tip {
   position: relative; display: inline-flex; align-items: center;
   width: 14px; height: 14px; border-radius: 50%;
