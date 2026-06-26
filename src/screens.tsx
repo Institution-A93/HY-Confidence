@@ -35,6 +35,18 @@ export function InputScreen({
     if (e.key === "Enter") submit();
   };
 
+  // "coming soon" marker — LIVE input only (demo scenarios must look fully functional) and only on
+  // fields not yet fully wired into the live check (everything except company name + TIN).
+  const soonTag = () =>
+    live ? (
+      <>
+        <span className="soon-badge">{t("soon")}</span>
+        <span className="tip" data-tip={t("s1_soon_tip")}>
+          i
+        </span>
+      </>
+    ) : null;
+
   return (
     <div className="input-wrap">
       <div className={"card input-card" + (live ? " live" : "")}>
@@ -68,7 +80,10 @@ export function InputScreen({
         </div>
 
         <div className="field">
-          <label>{t("s1_contact")}</label>
+          <label>
+            {t("s1_contact")}
+            {soonTag()}
+          </label>
           <input
             value={v.person_first_name ?? ""}
             onChange={set("person_first_name")}
@@ -80,12 +95,7 @@ export function InputScreen({
         <div className="field">
           <label>
             {t("s1_phone")}
-            {/* Phone is collected but not yet wired into the check (reverse-lookup / channel
-                attribution per the spec are not live) — flag it honestly rather than imply it scores. */}
-            <span className="soon-badge">{t("soon")}</span>
-            <span className="tip" data-tip={t("s1_phone_soon_tip")}>
-              i
-            </span>
+            {soonTag()}
           </label>
           <input value={v.phone ?? ""} onChange={set("phone")} onKeyDown={onKey} placeholder={t("s1_phone_ph")} />
         </div>
@@ -93,11 +103,17 @@ export function InputScreen({
         {live && (
           <>
             <div className="field">
-              <label>{t("s1_website")}</label>
+              <label>
+                {t("s1_website")}
+                {soonTag()}
+              </label>
               <input value={v.website ?? ""} onChange={set("website")} onKeyDown={onKey} placeholder={t("s1_website_ph")} />
             </div>
             <div className="field">
-              <label>{t("s1_email")}</label>
+              <label>
+                {t("s1_email")}
+                {soonTag()}
+              </label>
               <input value={v.email ?? ""} onChange={set("email")} onKeyDown={onKey} placeholder={t("s1_email_ph")} />
             </div>
           </>
