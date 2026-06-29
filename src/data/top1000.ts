@@ -13,7 +13,7 @@
 // REFRESH: re-run `node tools/refresh-top1000.mjs` each period (it rewrites this file).
 export const TOP1000: { pulledAt: string; source: string; tins: string[] } = {
   pulledAt: "2026-06-25",
-  source: "SRC 1000 largest taxpayers (via karg.am)",
+  source: "SRC — 1000 largest taxpayers",
   tins: [
   "01850138", "02216066", "09400818", "00046317", "02566492", "02502212", "02627448", "04215053", "02847546", "02629813",
   "00454054", "02629374", "02899159", "01282006", "00159949", "01551651", "01520882", "02562664", "01808789", "09416902",

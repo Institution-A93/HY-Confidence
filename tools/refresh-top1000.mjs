@@ -53,7 +53,7 @@ const file = `// F-TAX-03 — SRC "1000 largest taxpayers" snapshot (feeds SP-02
 // REFRESH: re-run \`node tools/refresh-top1000.mjs\` each period (it rewrites this file).
 export const TOP1000: { pulledAt: string; source: string; tins: string[] } = {
   pulledAt: "${pulledAt}",
-  source: "SRC 1000 largest taxpayers (via karg.am)",
+  source: "SRC — 1000 largest taxpayers",
   tins: [
 ${rows.join("\n")}
   ],
