@@ -667,6 +667,14 @@ export default function App() {
           )}
         </div>
 
+        <footer className="site-footer">
+          <a className="footer-link" href="https://a93.dev" target="_blank" rel="noopener noreferrer">
+            a93.dev
+          </a>
+          <span className="footer-sep">·</span>
+          <span className="footer-slogan">from chip to cloud</span>
+        </footer>
+
         {modal === "kyc" && run && <KycModal fixture={run} onClose={() => setModal(null)} />}
 
         <ScenarioSwitcher t={t} onPick={onPrefill} onLive={selectLive} />
