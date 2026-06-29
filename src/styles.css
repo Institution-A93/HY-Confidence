@@ -516,6 +516,26 @@ a { color: inherit; }
 .rl-text .ev-group { font-family: var(--sans); }
 .read-line.reasoning .rl-marker { color: var(--evidence); }
 .read-line.reasoning .rl-text { border-left: 2px solid var(--evidence); padding-left: 13px; }
+
+/* per-proceeding (etc.) breakdown dropdown under a narrative line — grid col 2, under the text */
+.fact-breakdown { grid-column: 2; margin: 6px 0 2px; }
+.fact-breakdown summary {
+  cursor: pointer; user-select: none; list-style: none;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--sans); font-size: 12.5px; font-weight: 500; color: var(--evidence);
+}
+.fact-breakdown summary::-webkit-details-marker { display: none; }
+.fact-breakdown summary::before { content: "▾"; font-size: 9px; transition: transform .12s ease; }
+.fact-breakdown[open] summary::before { transform: rotate(180deg); }
+.fact-breakdown ul {
+  list-style: none; margin: 8px 0 2px; padding: 0 0 0 12px;
+  border-left: 2px solid var(--hairline-2);
+}
+.fact-breakdown li {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+  padding: 4px 0; font-family: var(--sans); font-size: 13px; color: var(--ink-2);
+}
+.fact-breakdown .fb-value { font-family: var(--mono); font-size: 12.5px; color: var(--ink); white-space: nowrap; }
 .tag-reason {
   display: inline-block; font-family: var(--mono); font-size: 9px; letter-spacing: .08em;
   text-transform: uppercase; color: var(--evidence); border: 1px solid #CBD5DF;

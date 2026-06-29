@@ -4,7 +4,7 @@
 // treats "queried, none found" and "couldn't query" oppositely (R-09 widens the band on the
 // latter; absence of evidence ≠ evidence). Pure types + helpers, browser- and node-safe.
 
-import type { Domain, Fact, Match } from "../types";
+import type { Domain, Fact, FactItem, Match } from "../types";
 
 // The 10 coverage domains the verdict's coverage fraction is measured against.
 export const COVERAGE_DOMAINS: Domain[] = [
@@ -63,6 +63,7 @@ export function makeFact(p: {
   url?: string;
   fetched_at: string;
   match?: Match;
+  items?: FactItem[];
 }): Fact {
   return {
     fact_id: `${p.catalog_id}-${++factSeq}`,
@@ -75,6 +76,7 @@ export function makeFact(p: {
     url: p.url ?? "",
     fetched_at: p.fetched_at,
     match: p.match ?? "exact",
+    ...(p.items && p.items.length ? { items: p.items } : {}),
   };
 }
 

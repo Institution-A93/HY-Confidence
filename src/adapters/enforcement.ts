@@ -115,6 +115,16 @@ export const enforcementAdapter: SourceAdapter = {
       // count + total claimed amount so the signal layer can scale SN-11 (no longer a flat veto —
       // a large solvent entity can carry minor proceedings). "total <n> AMD" is parsed downstream.
       const total = rems.reduce((s, r) => s + (Number(r.INQUESTAMOUNT) || 0), 0);
+      // Per-proceeding breakdown for the dossier dropdown: creditor (Պահանջատեր) + amount, largest
+      // first. This is ALL the source exposes per proceeding — no case number, date, or link (the
+      // DebtorRems API returns only {PLAINTIFFNAME, INQUESTAMOUNT}), so the rows carry no url.
+      const items = rems
+        .slice()
+        .sort((a, b) => (Number(b.INQUESTAMOUNT) || 0) - (Number(a.INQUESTAMOUNT) || 0))
+        .map((r) => ({
+          label: (r.PLAINTIFFNAME || "—").trim(),
+          value: r.INQUESTAMOUNT != null ? `${Number(r.INQUESTAMOUNT).toLocaleString("en-US")} AMD` : "",
+        }));
       const fact = makeFact({
         catalog_id: "F-ENF-01",
         subject: tin,
@@ -127,6 +137,7 @@ export const enforcementAdapter: SourceAdapter = {
         url: "",
         fetched_at: now,
         match: "exact", // TIN-confirmed (queried by ՀՎՀՀ, not by name)
+        items, // creditor + amount per proceeding (the dossier renders these as a dropdown)
       });
       return { domain: "enforcement", status: "verified", facts: [fact], fetched_at: now, source: this.source };
     } catch (e) {

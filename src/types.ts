@@ -20,6 +20,15 @@ export type Domain =
   | "sanctions"
   | "representative";
 
+// Optional per-row breakdown behind a fact whose value is an aggregate (e.g. F-ENF-01 carries
+// "N proceedings, total X" in `value` and the individual proceedings here). Additive + optional;
+// the render shows it as an expandable dropdown. label = the primary string (e.g. creditor name),
+// value = a secondary string (e.g. formatted amount). Data only — never translated.
+export interface FactItem {
+  label: string;
+  value?: string;
+}
+
 // An atomic, sourced datum. Nothing enters the Signal layer that is not a Fact.
 export interface Fact {
   fact_id: string;
@@ -32,6 +41,7 @@ export interface Fact {
   url: string; // deep link to evidence; "" when none
   fetched_at: string; // ISO timestamp
   match: Match;
+  items?: FactItem[]; // optional per-row breakdown behind an aggregate value (see FactItem)
 }
 
 export type Grade = "blocker" | "strong" | "weak";

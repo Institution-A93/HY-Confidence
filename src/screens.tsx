@@ -480,6 +480,7 @@ export function VerdictScreen({
   const r07 = rules.find((r) => r.id === "R-07");
 
   const narr = v.narrative || [];
+  const factById = new Map((fixture.facts || []).map((f) => [f.fact_id, f]));
   const groups = tierGroups(v);
 
   function sigsForLine(line: NarrativeLine): string[] {
@@ -612,6 +613,9 @@ export function VerdictScreen({
             {narr.map((line, i) => {
               const tag = reasoningTag(line.text);
               const isReason = !!reasoningClass(line.text);
+              // Per-row breakdown carried on an evidence fact (e.g. F-ENF-01 enforcement proceedings)
+              // → render an expandable dropdown under the line. Data only (creditor + amount), no links.
+              const items = (line.evidence || []).flatMap((id) => factById.get(id)?.items || []);
               return (
                 <div
                   key={i}
@@ -624,6 +628,19 @@ export function VerdictScreen({
                     {tag && <span className="tag-reason">{t("tag_" + tag)}</span>}
                     {joinPieces(t, line.i18n) ?? line.text} <EvidenceLinks fixture={fixture} ids={line.evidence} />
                   </p>
+                  {items.length > 0 && (
+                    <details className="fact-breakdown">
+                      <summary>{t("fact_breakdown", { n: items.length })}</summary>
+                      <ul>
+                        {items.map((it, k) => (
+                          <li key={k}>
+                            <span className="fb-label">{it.label}</span>
+                            {it.value && <span className="fb-value">{it.value}</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                 </div>
               );
             })}
